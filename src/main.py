@@ -17,7 +17,8 @@ from downloader_core import VideoDownloader
 from ui_components import ProgressWindow, QualitySelector, VideoInfoPanel
 from settings_manager import SettingsManager
 
-class YouTubeDownloaderApp(QMainWindow):
+class YouTubeDownloaderApp(QMainWindow):    
+    
     def __init__(self):
         super().__init__()
         
