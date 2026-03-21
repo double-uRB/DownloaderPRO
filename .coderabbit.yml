@@ -1,3 +1,9 @@
+language: "en-US"
+reviews:
+  enabled: true
+  auto_review:
+    enabled: true
+    drafts: false
 # CodeRabbit Configuration
 reviews:
   request_changes: true
