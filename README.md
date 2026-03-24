@@ -1,10 +1,38 @@
-This is how the application looks like after opening-
-<img width="1260" height="720" alt="image" src="https://github.com/user-attachments/assets/43883d45-d4d0-4255-9f05-74c556e1b1cd" />
-It's very simple to use, just copy the YouTube Video URL you like and click on "paste" 
-Then Click on "Fetch" 
-after fetching the video info you can select your desired resolution for download,
-choose the directory where you'd like to save the video. 
-You can just download the audio if that what you want by checking the "audio only box down below. 
-<img width="1260 " height="720" alt="image" src="https://github.com/user-attachments/assets/13930bce-b2d4-4cfe-8916-27f8836fff42" />
-Then Click on "Download" , wait & Voila!
-<img width="1260" height="720" alt="image" src="https://github.com/user-attachments/assets/f2355056-45d1-4d3f-8b17-01a3ead3f711" />
+# YouTube Downloader Pro
+
+A modern, professional YouTube video downloader built with Python and PySide6. Features a clean GUI with dark/light themes, detailed quality selection, and progress tracking.
+
+## ✨ Features
+
+- **Modern PySide6 GUI** with responsive design
+- **Dark/Light Theme Toggle** with proper contrast
+- **Detailed Quality Selection** showing resolution, codec, bitrate, HDR/SDR info
+- **Video & Audio Format Details** (H.264, VP9, AV1, AAC, Opus support)
+- **Real-time Progress Tracking** with download speed and ETA
+- **Audio-only Downloads** (MP3 extraction)
+- **Clipboard Integration** with paste button
+- **Settings Persistence** remembers download location and theme
+- **Portable Executable** builds available
+
+## 🖼️ Screenshots
+
+*Add screenshots of your app here*
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.8+
+- FFmpeg (included in builds)
+
+### Installation
+
+1. **Clone the repository:**
+
+
+pip install -r requirements.txt
+python src/main.py
+
+
+
+## Legal Notice
+For educational and personal use only. Respect YouTube's Terms of Service.

@@ -1,0 +1,36 @@
+# CodeRabbit Configuration
+
+language: "en-US"
+reviews:
+  enabled: true
+  auto_review:
+    enabled: true
+    drafts: false
+
+
+rules:
+  - type: "logic"
+    enabled: true
+  - type: "security"
+    enabled: true
+  - type: "performance"
+    enabled: true
+  - type: "style"
+    enabled: true
+
+languages:
+  - "python"
+  - "javascript"
+  - "typescript"
+  - "yaml"
+  - "json"
+
+ignore_patterns:
+  - "node_modules/**"
+  - "dist/**"
+  - ".git/**"
+  - "*.lock"
+  - "*.min.js"
+
+max_files: 50
+max_lines_per_file: 500
