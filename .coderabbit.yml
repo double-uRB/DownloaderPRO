@@ -1,14 +1,12 @@
+# CodeRabbit Configuration
+
 language: "en-US"
 reviews:
   enabled: true
   auto_review:
     enabled: true
     drafts: false
-# CodeRabbit Configuration
-reviews:
-  request_changes: true
-  auto_review: true
-  drafts: false
+
 
 rules:
   - type: "logic"

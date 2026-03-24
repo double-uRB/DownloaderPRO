@@ -1,7 +1,12 @@
 {
-  "theme": "light",
+  "theme": "dark",
   "download_path": "D:/Download/Test Files",
   "last_quality": "auto",
   "audio_only": false,
-  "window_geometry": "900x650"
+  "window_geometry": "900x650",
+  "filename_pattern": "{date}_{filename}.{ext}",
+  "auto_resume": true,
+  "max_concurrent": 5,
+  "speed_limit": 0,
+  "thread_intensity": "high"
 }

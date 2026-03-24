@@ -1,175 +1,362 @@
+"""
+Downloader PRO — Main Application
+Modern sidebar + stacked content layout with glassmorphism UI.
+"""
+
 import sys
 import os
-import threading
 import pyperclip
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QLabel, QPushButton, QLineEdit, QFileDialog, QCheckBox, 
-    QRadioButton, QButtonGroup, QScrollArea, QFrame, QMessageBox,
-    QProgressDialog, QTabWidget, QGridLayout, QSizePolicy
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QPushButton, QLineEdit, QFileDialog, QCheckBox,
+    QMessageBox, QStackedWidget, QSizePolicy, QFrame
 )
-from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize
-from PySide6.QtGui import QFont, QPalette, QColor, QIcon
+from PySide6.QtCore import Qt, QThread, Signal, QSize
+from PySide6.QtGui import QFont, QIcon
 
 from downloader_core import VideoDownloader
-from ui_components import ProgressWindow, QualitySelector, VideoInfoPanel
+from ui_components import VideoInfoPanel, QualitySelector, ProgressWidget
 from settings_manager import SettingsManager
+from sidebar import Sidebar
+from theme import generate_stylesheet
+from downloads_page import DownloadsPage
+from settings_page import SettingsPage
 
-class YouTubeDownloaderApp(QMainWindow):    
-    
+
+class YouTubeDownloaderApp(QMainWindow):
+
     def __init__(self):
         super().__init__()
-        
+
         # Initialize managers
         self.settings = SettingsManager()
-        
-        # Initialize components
         self.downloader = VideoDownloader()
         self.current_video_info = None
         self.quality_selector = None
-        
+        self.download_counter = 0
+
         # Load settings
         self.download_path = self.settings.get_download_path()
         self.theme_mode = self.settings.get_theme()
-        
+
         # Setup UI
-        self.setup_ui()
-        self.apply_theme()
-        
-        # Set window properties
-        self.setWindowTitle("YouTube Downloader Pro")
-        self.setMinimumSize(800, 600)
-        self.resize(900, 650)
-        
-    def setup_ui(self):
-        """Create the main UI layout"""
-        # Create central widget
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        
-        # Main layout
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(20)
-        
-        # Header
-        self.create_header(main_layout)
-        
-        # URL Input Section
-        self.create_url_section(main_layout)
-        
-        # Video Info Panel (initially hidden)
-        self.video_info_panel = VideoInfoPanel()
-        main_layout.addWidget(self.video_info_panel)
-        self.video_info_panel.hide()
-        
-        # Quality Selection (initially hidden)
-        self.quality_frame = QFrame()
-        main_layout.addWidget(self.quality_frame)
-        self.quality_frame.hide()
-        
-        # Download Settings
-        self.create_download_section(main_layout)
-        
-        # Status bar
-        self.statusBar().showMessage("Ready to download")
-        
-    def create_header(self, parent_layout):
-        """Create header with title and theme toggle"""
-        header_layout = QHBoxLayout()
-        
-        # Title
-        title_label = QLabel("YouTube Downloader Pro")
-        title_label.setFont(QFont("Arial", 24, QFont.Weight.Bold))
-        header_layout.addWidget(title_label)
-        
-        header_layout.addStretch()
-        
-        # Theme toggle button
-        self.theme_btn = QPushButton("🌙" if self.theme_mode == "light" else "☀️")
-        self.theme_btn.setFixedSize(50, 40)
-        self.theme_btn.clicked.connect(self.toggle_theme)
-        header_layout.addWidget(self.theme_btn)
-        
-        parent_layout.addLayout(header_layout)
-    
-    def create_url_section(self, parent_layout):
-        """Create URL input section"""
-        url_frame = QFrame()
-        url_frame.setFrameStyle(QFrame.Shape.StyledPanel)
-        url_layout = QVBoxLayout(url_frame)
-        
-        # URL Label
-        url_label = QLabel("Enter Video URL:")
-        url_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        url_layout.addWidget(url_label)
-        
-        # URL Input Row
-        url_input_layout = QHBoxLayout()
-        
-        # URL Entry
+        self._setup_ui()
+        self._apply_theme()
+
+        # Window properties
+        self.setWindowTitle("Downloader PRO")
+        self.setMinimumSize(1000, 650)
+        self.resize(1100, 750)
+
+    def _setup_ui(self):
+        """Create the sidebar + main content layout."""
+        central = QWidget()
+        self.setCentralWidget(central)
+
+        root_layout = QHBoxLayout(central)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        # ── Sidebar ──
+        self.sidebar = Sidebar()
+        self.sidebar.page_changed.connect(self._on_page_changed)
+        root_layout.addWidget(self.sidebar)
+
+        # ── Main content area ──
+        main_container = QWidget()
+        main_layout = QVBoxLayout(main_container)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Top header bar
+        self._create_top_header(main_layout)
+
+        # Stacked pages
+        self.page_stack = QStackedWidget()
+
+        # Page 0: Dashboard
+        self.dashboard_page = self._create_dashboard_page()
+        self.page_stack.addWidget(self.dashboard_page)
+
+        # Page 1: Downloads
+        self.downloads_page = DownloadsPage()
+        self.page_stack.addWidget(self.downloads_page)
+
+        # Page 2: Settings
+        self.settings_page = SettingsPage(self.settings)
+        self.settings_page.theme_changed.connect(self._on_theme_changed)
+        self.page_stack.addWidget(self.settings_page)
+
+        main_layout.addWidget(self.page_stack)
+        root_layout.addWidget(main_container)
+
+    def _create_top_header(self, parent_layout):
+        """Top bar with page title, theme toggle, and user avatar."""
+        header = QWidget()
+        header.setObjectName("top_header")
+        header.setFixedHeight(56)
+
+        h_layout = QHBoxLayout(header)
+        h_layout.setContentsMargins(24, 0, 24, 0)
+        h_layout.setSpacing(12)
+
+        # Page title
+        title_col = QVBoxLayout()
+        title_col.setSpacing(0)
+        self.page_title = QLabel("Dashboard")
+        self.page_title.setObjectName("page_title")
+        self.page_title.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        title_col.addWidget(self.page_title)
+
+        self.page_subtitle = QLabel("MANAGING ACTIVE TASKS")
+        self.page_subtitle.setObjectName("page_subtitle")
+        self.page_subtitle.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
+        title_col.addWidget(self.page_subtitle)
+
+        h_layout.addLayout(title_col)
+        h_layout.addStretch()
+
+        # Theme toggle
+        toggle_container = QWidget()
+        toggle_container.setObjectName("theme_toggle_bg")
+        toggle_container.setFixedSize(64, 30)
+
+        toggle_layout = QHBoxLayout(toggle_container)
+        toggle_layout.setContentsMargins(4, 4, 4, 4)
+        toggle_layout.setSpacing(0)
+
+        self.light_icon = QLabel("☀️")
+        self.light_icon.setFont(QFont("Segoe UI", 10))
+        self.light_icon.setFixedSize(22, 22)
+        self.light_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        toggle_layout.addWidget(self.light_icon)
+
+        toggle_layout.addStretch()
+
+        self.dark_icon = QLabel("🌙")
+        self.dark_icon.setFont(QFont("Segoe UI", 10))
+        self.dark_icon.setFixedSize(22, 22)
+        self.dark_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        toggle_layout.addWidget(self.dark_icon)
+
+        toggle_container.setCursor(Qt.CursorShape.PointingHandCursor)
+        toggle_container.mousePressEvent = lambda e: self._toggle_theme()
+
+        h_layout.addWidget(toggle_container)
+
+        # User avatar placeholder
+        avatar = QLabel("👤")
+        avatar.setFont(QFont("Segoe UI", 14))
+        avatar.setFixedSize(34, 34)
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setStyleSheet("background-color: #2d3449; border-radius: 17px; border: 1px solid rgba(76, 215, 246, 0.2);")
+        h_layout.addWidget(avatar)
+
+        parent_layout.addWidget(header)
+
+    def _create_dashboard_page(self):
+        """Build the dashboard page (URL input + video info + quality + download)."""
+        from PySide6.QtWidgets import QScrollArea
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(20)
+
+        # ── URL Input Card ──
+        url_card = QWidget()
+        url_card.setObjectName("glass_panel")
+        url_layout = QVBoxLayout(url_card)
+        url_layout.setContentsMargins(24, 20, 24, 20)
+        url_layout.setSpacing(12)
+
+        url_title_row = QHBoxLayout()
+        link_icon = QLabel("🔗")
+        link_icon.setFont(QFont("Segoe UI", 16))
+        url_title_row.addWidget(link_icon)
+        url_title = QLabel("Paste Video URL")
+        url_title.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        url_title_row.addWidget(url_title)
+        url_title_row.addStretch()
+        url_layout.addLayout(url_title_row)
+
+        input_row = QHBoxLayout()
+        input_row.setSpacing(12)
+
+        # URL input with inline paste button
+        url_input_container = QWidget()
+        url_input_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        url_input_layout = QHBoxLayout(url_input_container)
+        url_input_layout.setContentsMargins(0, 0, 0, 0)
+        url_input_layout.setSpacing(0)
+
         self.url_entry = QLineEdit()
-        self.url_entry.setPlaceholderText("Paste YouTube URL here...")
-        self.url_entry.setFixedHeight(45)
-        self.url_entry.setFont(QFont("Arial", 12))
+        self.url_entry.setPlaceholderText("https://youtube.com/watch?v=...")
+        self.url_entry.setFixedHeight(46)
+        self.url_entry.setFont(QFont("Segoe UI", 12))
         url_input_layout.addWidget(self.url_entry)
-        
-        # Paste Button
+
         paste_btn = QPushButton("📋 Paste")
-        paste_btn.setFixedSize(80, 45)
-        paste_btn.clicked.connect(self.paste_url)
+        paste_btn.setObjectName("paste_button")
+        paste_btn.setFixedSize(80, 30)
+        paste_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        paste_btn.clicked.connect(self._paste_url)
         url_input_layout.addWidget(paste_btn)
-        
-        # Fetch Button
-        self.fetch_btn = QPushButton("🔍 Fetch Info")
-        self.fetch_btn.setFixedSize(120, 45)
-        self.fetch_btn.clicked.connect(self.fetch_video_info)
-        url_input_layout.addWidget(self.fetch_btn)
-        
-        url_layout.addLayout(url_input_layout)
-        parent_layout.addWidget(url_frame)
-    
-    def create_download_section(self, parent_layout):
-        """Create download settings section"""
-        download_frame = QFrame()
-        download_frame.setFrameStyle(QFrame.Shape.StyledPanel)
-        download_layout = QVBoxLayout(download_frame)
-        
-        # Download Path
-        path_label = QLabel("Download Location:")
-        path_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        download_layout.addWidget(path_label)
-        
-        path_layout = QHBoxLayout()
-        
-        self.path_entry = QLineEdit(self.download_path)
-        self.path_entry.setFixedHeight(35)
-        path_layout.addWidget(self.path_entry)
-        
-        browse_btn = QPushButton("📁 Browse")
-        browse_btn.setFixedSize(100, 35)
-        browse_btn.clicked.connect(self.browse_folder)
-        path_layout.addWidget(browse_btn)
-        
-        download_layout.addLayout(path_layout)
-        
-        # Audio only checkbox
-        self.audio_only_cb = QCheckBox("Audio only (MP3)")
-        download_layout.addWidget(self.audio_only_cb)
-        
-        # Download Button
-        self.download_btn = QPushButton("⬇️ Download Video")
-        self.download_btn.setFixedHeight(50)
-        self.download_btn.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        self.download_btn.clicked.connect(self.start_download)
-        download_layout.addWidget(self.download_btn)
-        
-        parent_layout.addWidget(download_frame)
-    
-    def paste_url(self):
-        """Paste URL from clipboard"""
+
+        input_row.addWidget(url_input_container)
+
+        # Fetch button
+        self.fetch_btn = QPushButton("🔍  Fetch Info")
+        self.fetch_btn.setObjectName("primary_button")
+        self.fetch_btn.setFixedSize(140, 46)
+        self.fetch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.fetch_btn.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        self.fetch_btn.clicked.connect(self._fetch_video_info)
+        input_row.addWidget(self.fetch_btn)
+
+        url_layout.addLayout(input_row)
+        layout.addWidget(url_card)
+
+        # ── Main content grid: Video Info (left) + Options (right) ──
+        content_row = QHBoxLayout()
+        content_row.setSpacing(20)
+
+        # Left: Video Info Panel
+        self.video_info_panel = VideoInfoPanel()
+        self.video_info_panel.hide()
+        content_row.addWidget(self.video_info_panel, stretch=3)
+
+        # Right: Quality + Actions
+        self.right_panel = QWidget()
+        self.right_panel.hide()
+        right_layout = QVBoxLayout(self.right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(16)
+
+        # Quality selector placeholder
+        self.quality_container = QVBoxLayout()
+        right_layout.addLayout(self.quality_container)
+
+        # Actions panel
+        actions_card = QWidget()
+        actions_card.setObjectName("surface_card")
+        actions_layout = QVBoxLayout(actions_card)
+        actions_layout.setContentsMargins(20, 16, 20, 16)
+        actions_layout.setSpacing(14)
+
+        # Save to
+        save_label = QLabel("SAVE TO")
+        save_label.setObjectName("stat_label")
+        save_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        actions_layout.addWidget(save_label)
+
+        path_row = QHBoxLayout()
+        path_row.setSpacing(8)
+
+        self.path_display = QLabel(self.download_path)
+        self.path_display.setFont(QFont("Segoe UI", 11))
+        self.path_display.setStyleSheet("padding: 6px 10px; background-color: #060e20; border-radius: 6px;")
+        self.path_display.setMaximumWidth(250)
+        path_row.addWidget(self.path_display, stretch=1)
+
+        browse_btn = QPushButton("📁")
+        browse_btn.setFixedSize(38, 34)
+        browse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        browse_btn.clicked.connect(self._browse_folder)
+        path_row.addWidget(browse_btn)
+
+        actions_layout.addLayout(path_row)
+
+        # Audio only toggle
+        audio_row = QHBoxLayout()
+        audio_icon = QLabel("🎵")
+        audio_icon.setFont(QFont("Segoe UI", 14))
+        audio_row.addWidget(audio_icon)
+
+        audio_label = QLabel("Audio (MP3)")
+        audio_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        audio_row.addWidget(audio_label)
+
+        audio_row.addStretch()
+
+        self.audio_only_cb = QCheckBox()
+        audio_row.addWidget(self.audio_only_cb)
+
+        actions_layout.addLayout(audio_row)
+
+        # Download button
+        self.download_btn = QPushButton("⬇️  Download")
+        self.download_btn.setObjectName("download_button")
+        self.download_btn.setFixedHeight(52)
+        self.download_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.download_btn.setFont(QFont("Segoe UI", 15, QFont.Weight.Black))
+        self.download_btn.clicked.connect(self._start_download)
+        actions_layout.addWidget(self.download_btn)
+
+        # SSL notice
+        ssl_label = QLabel("🔒 SSL Encrypted & Ad-Free")
+        ssl_label.setObjectName("section_subtitle")
+        ssl_label.setFont(QFont("Segoe UI", 9))
+        ssl_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        actions_layout.addWidget(ssl_label)
+
+        right_layout.addWidget(actions_card)
+        right_layout.addStretch()
+
+        content_row.addWidget(self.right_panel, stretch=2)
+        layout.addLayout(content_row)
+
+        # ── Progress widget placeholder ──
+        self.progress_container = QVBoxLayout()
+        layout.addLayout(self.progress_container)
+
+        layout.addStretch()
+
+        scroll.setWidget(page)
+        return scroll
+
+    # ─── Navigation ─────────────────────────────────────────────────────────
+
+    def _on_page_changed(self, page_key):
+        page_map = {"dashboard": 0, "downloads": 1, "settings": 2}
+        title_map = {
+            "dashboard": ("Dashboard", "MANAGING ACTIVE TASKS"),
+            "downloads": ("Downloads", "LIBRARY & QUEUE"),
+            "settings": ("Settings", "APP CONFIGURATION"),
+        }
+        idx = page_map.get(page_key, 0)
+        self.page_stack.setCurrentIndex(idx)
+        title, subtitle = title_map.get(page_key, ("Dashboard", ""))
+        self.page_title.setText(title)
+        self.page_subtitle.setText(subtitle)
+
+    # ─── Theme ──────────────────────────────────────────────────────────────
+
+    def _toggle_theme(self):
+        new_theme = "light" if self.theme_mode == "dark" else "dark"
+        self.theme_mode = new_theme
+        self.settings.set_theme(new_theme)
+        self._apply_theme()
+
+    def _on_theme_changed(self, theme):
+        if theme == "auto":
+            theme = "dark"  # Default auto to dark for now
+        self.theme_mode = theme
+        self.settings.set_theme(theme)
+        self._apply_theme()
+
+    def _apply_theme(self):
+        self.setStyleSheet(generate_stylesheet(self.theme_mode))
+
+    # ─── URL / Fetch ────────────────────────────────────────────────────────
+
+    def _paste_url(self):
         try:
             clipboard_content = pyperclip.paste()
             if clipboard_content and ("youtube.com" in clipboard_content or "youtu.be" in clipboard_content):
@@ -179,250 +366,127 @@ class YouTubeDownloaderApp(QMainWindow):
                 QMessageBox.warning(self, "Warning", "No valid YouTube URL found in clipboard")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to paste: {str(e)}")
-    
-    def toggle_theme(self):
-        """Toggle between light and dark theme"""
-        new_theme = "dark" if self.theme_mode == "light" else "light"
-        self.theme_mode = new_theme
-        self.settings.set_theme(new_theme)
-        self.apply_theme()
-        
-        # Update button icon
-        self.theme_btn.setText("🌙" if new_theme == "light" else "☀️")
-        self.statusBar().showMessage(f"Switched to {new_theme} mode")
 
-    def apply_theme(self):
-        """Apply dark or light theme with proper contrast"""
-        if self.theme_mode == "dark":
-            # Dark theme colors
-            self.setStyleSheet("""
-                QMainWindow {
-                    background-color: #2b2b2b;
-                    color: #ffffff;
-                }
-                QFrame {
-                    background-color: #3c3c3c;
-                    border: 1px solid #555555;
-                    border-radius: 8px;
-                    padding: 10px;
-                }
-                QLineEdit {
-                    background-color: #4a4a4a;
-                    border: 2px solid #606060;
-                    border-radius: 6px;
-                    color: #ffffff;
-                    padding: 8px;
-                }
-                QLineEdit:focus {
-                    border-color: #3b82f6;
-                }
-                QPushButton {
-                    background-color: #3b82f6;
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    padding: 8px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #2563eb;
-                }
-                QPushButton:pressed {
-                    background-color: #1d4ed8;
-                }
-                QLabel {
-                    color: #ffffff;
-                }
-                QCheckBox {
-                    color: #ffffff;
-                }
-                QRadioButton {
-                    color: #ffffff;
-                }
-            """)
-        else:
-            # Light theme with proper contrast
-            self.setStyleSheet("""
-                QMainWindow {
-                    background-color: #ffffff;
-                    color: #000000;
-                }
-                QFrame {
-                    background-color: #f8f9fa;
-                    border: 1px solid #e9ecef;
-                    border-radius: 8px;
-                    padding: 10px;
-                }
-                QLineEdit {
-                    background-color: #ffffff;
-                    border: 2px solid #d1d5db;
-                    border-radius: 6px;
-                    color: #000000;
-                    padding: 8px;
-                }
-                QLineEdit:focus {
-                    border-color: #3b82f6;
-                }
-                QPushButton {
-                    background-color: #3b82f6;
-                    color: #ffffff;
-                    border: none;
-                    border-radius: 6px;
-                    padding: 8px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #2563eb;
-                }
-                QPushButton:pressed {
-                    background-color: #1d4ed8;
-                }
-                QLabel {
-                    color: #000000;
-                }
-                QCheckBox {
-                    color: #000000;
-                }
-                QRadioButton {
-                    color: #000000;
-                }
-                QCheckBox::indicator {
-                    border: 2px solid #6b7280;
-                    border-radius: 3px;
-                    background-color: #ffffff;
-                }
-                QCheckBox::indicator:checked {
-                    background-color: #3b82f6;
-                    border-color: #3b82f6;
-                }
-                QRadioButton::indicator {
-                    border: 2px solid #6b7280;
-                    border-radius: 8px;
-                    background-color: #ffffff;
-                }
-                QRadioButton::indicator:checked {
-                    background-color: #3b82f6;
-                    border-color: #3b82f6;
-                }
-            """)
-
-    def fetch_video_info(self):
-        """Fetch video information"""
+    def _fetch_video_info(self):
         url = self.url_entry.text().strip()
         if not url:
             QMessageBox.critical(self, "Error", "Please enter a YouTube URL")
             return
-        
+
         self.statusBar().showMessage("Fetching video information...")
         self.fetch_btn.setEnabled(False)
         self.fetch_btn.setText("Loading...")
-        
-        # Start fetching in background thread
+
         self.fetch_thread = VideoInfoThread(url, self.downloader)
-        self.fetch_thread.info_fetched.connect(self.on_video_info_fetched)
-        self.fetch_thread.error_occurred.connect(self.on_fetch_error)
+        self.fetch_thread.info_fetched.connect(self._on_video_info_fetched)
+        self.fetch_thread.error_occurred.connect(self._on_fetch_error)
         self.fetch_thread.start()
 
-    def on_video_info_fetched(self, info):
-        """Handle successful video info fetch"""
+    def _on_video_info_fetched(self, info):
         self.current_video_info = info
-        
+
         # Update video info panel
         self.video_info_panel.update_info(info)
         self.video_info_panel.show()
-        
+
         # Show quality selector
-        self.show_quality_selector(info.get('formats', []))
-        
-        # Re-enable fetch button
+        self._show_quality_selector(info.get('formats', []))
+
+        # Show right panel
+        self.right_panel.show()
+
         self.fetch_btn.setEnabled(True)
-        self.fetch_btn.setText("🔍 Fetch Info")
+        self.fetch_btn.setText("🔍  Fetch Info")
         self.statusBar().showMessage("Video information loaded successfully")
 
-    def on_fetch_error(self, error_msg):
-        """Handle fetch error"""
+    def _on_fetch_error(self, error_msg):
         self.fetch_btn.setEnabled(True)
-        self.fetch_btn.setText("🔍 Fetch Info")
+        self.fetch_btn.setText("🔍  Fetch Info")
         self.statusBar().showMessage("Failed to fetch video information")
         QMessageBox.critical(self, "Error", f"Failed to fetch video info: {error_msg}")
 
-    def show_quality_selector(self, formats):
-        """Show quality selection options"""
-        if hasattr(self, 'quality_selector') and self.quality_selector:
-            self.quality_selector.deleteLater()
-        
-        self.quality_selector = QualitySelector(formats)
-        
-        # Clear existing layout in quality frame
-        if self.quality_frame.layout():
-            while self.quality_frame.layout().count():
-                child = self.quality_frame.layout().takeAt(0)
-                if child.widget():
-                    child.widget().deleteLater()
-        else:
-            layout = QVBoxLayout(self.quality_frame)
-        
-        self.quality_frame.layout().addWidget(self.quality_selector)
-        self.quality_frame.show()
+    def _show_quality_selector(self, formats):
+        # Clear existing
+        while self.quality_container.count():
+            child = self.quality_container.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
 
-    def browse_folder(self):
-        """Browse for download folder"""
+        self.quality_selector = QualitySelector(formats)
+        self.quality_container.addWidget(self.quality_selector)
+
+    # ─── Download ───────────────────────────────────────────────────────────
+
+    def _browse_folder(self):
         folder = QFileDialog.getExistingDirectory(
             self, "Select Download Folder", self.download_path
         )
         if folder:
             self.download_path = folder
-            self.path_entry.setText(folder)
+            self.path_display.setText(folder)
             self.settings.set_download_path(folder)
-            self.statusBar().showMessage("Download location updated")
 
-    def start_download(self):
-        """Start the download process"""
+    def _start_download(self):
         if not self.current_video_info:
             QMessageBox.warning(self, "Warning", "Please fetch video info first")
             return
-        
-        if not hasattr(self, 'quality_selector') or not self.quality_selector:
+
+        if not self.quality_selector:
             QMessageBox.warning(self, "Warning", "Please select a quality option")
             return
-        
-        # Get settings
+
         url = self.url_entry.text().strip()
         quality = self.quality_selector.get_selected_quality()
-        output_path = self.path_entry.text().strip()
+        output_path = self.download_path
         audio_only = self.audio_only_cb.isChecked()
-        
+
         if not output_path:
             QMessageBox.warning(self, "Warning", "Please select a download location")
             return
-        
-        # Create progress window
-        progress_window = ProgressWindow(self, self.current_video_info)
-        progress_window.show()
-        
+
+        # Create progress widget on dashboard
+        progress_widget = ProgressWidget(self.current_video_info)
+        self.progress_container.addWidget(progress_widget)
+
+        # Also add to downloads page
+        self.download_counter += 1
+        dl_id = f"dl_{self.download_counter}"
+        title = self.current_video_info.get('title', 'Unknown')
+        dl_card = self.downloads_page.add_active_download(dl_id, title[:50], "YouTube • MP4")
+
         # Start download thread
         self.download_thread = DownloadThread(
             url, quality, output_path, audio_only, self.downloader
         )
-        self.download_thread.progress_updated.connect(progress_window.update_progress)
-        self.download_thread.download_completed.connect(progress_window.download_complete)
-        self.download_thread.download_failed.connect(progress_window.download_failed)
+        self.download_thread.progress_updated.connect(progress_widget.update_progress)
+        self.download_thread.progress_updated.connect(
+            lambda p, s: self.downloads_page.update_download_progress(dl_id, p, s)
+        )
+        self.download_thread.download_completed.connect(progress_widget.download_complete)
+        self.download_thread.download_completed.connect(
+            lambda: self.downloads_page.complete_download(dl_id, title[:50], "—")
+        )
+        self.download_thread.download_failed.connect(progress_widget.download_failed)
         self.download_thread.start()
-    
+
+        self.statusBar().showMessage("Download started...")
+
     def closeEvent(self, event):
-        """Handle application closing"""
         self.settings.save_settings()
         event.accept()
+
+
+# ─── Worker Threads ────────────────────────────────────────────────────────
 
 class VideoInfoThread(QThread):
     info_fetched = Signal(dict)
     error_occurred = Signal(str)
-    
+
     def __init__(self, url, downloader):
         super().__init__()
         self.url = url
         self.downloader = downloader
-    
+
     def run(self):
         try:
             info = self.downloader.get_video_info(self.url)
@@ -433,11 +497,12 @@ class VideoInfoThread(QThread):
         except Exception as e:
             self.error_occurred.emit(str(e))
 
+
 class DownloadThread(QThread):
     progress_updated = Signal(int, str)
     download_completed = Signal()
     download_failed = Signal()
-    
+
     def __init__(self, url, quality, output_path, audio_only, downloader):
         super().__init__()
         self.url = url
@@ -445,17 +510,16 @@ class DownloadThread(QThread):
         self.output_path = output_path
         self.audio_only = audio_only
         self.downloader = downloader
-    
+
     def run(self):
         def progress_callback(progress, status):
             self.progress_updated.emit(int(progress), status)
-        
+
         try:
             success = self.downloader.download_video(
-                self.url, self.quality, self.output_path, 
+                self.url, self.quality, self.output_path,
                 self.audio_only, progress_callback
             )
-            
             if success:
                 self.download_completed.emit()
             else:
@@ -464,17 +528,17 @@ class DownloadThread(QThread):
             print(f"Download error: {e}")
             self.download_failed.emit()
 
+
 def main():
     app = QApplication(sys.argv)
-    
-    # Set application properties
-    app.setApplicationName("YouTube Downloader Pro")
-    app.setOrganizationName("Your Name")
-    
+    app.setApplicationName("Downloader PRO")
+    app.setOrganizationName("DownloaderPRO")
+
     window = YouTubeDownloaderApp()
     window.show()
-    
+
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()
