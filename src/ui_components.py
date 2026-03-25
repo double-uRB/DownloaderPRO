@@ -240,9 +240,10 @@ class QualityCard(QPushButton):
 
     selected_changed = Signal(str)
 
-    def __init__(self, format_id, resolution, codec, file_size, is_hdr=False, parent=None):
+    def __init__(self, format_id, resolution, codec, file_size, height="auto", is_hdr=False, parent=None):
         super().__init__(parent)
         self.format_id = format_id
+        self.height = height
         self.setObjectName("quality_card")
         self.setCheckable(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -331,7 +332,7 @@ class QualitySelector(QWidget):
     def __init__(self, formats, parent=None):
         super().__init__(parent)
         self.formats = formats
-        self.selected_format_id = "auto"
+        self.selected_quality = "auto"
         self.quality_cards: list[QualityCard] = []
         self._setup_ui()
 
@@ -361,6 +362,7 @@ class QualitySelector(QWidget):
                 resolution=qinfo["resolution"],
                 codec=qinfo["video_codec"],
                 file_size=qinfo["size_estimate"],
+                height=qinfo.get("height", "auto"),
                 is_hdr=qinfo.get("is_hdr", False),
             )
             card.selected_changed.connect(self._on_card_selected)
@@ -370,12 +372,13 @@ class QualitySelector(QWidget):
             # Default select first
             if i == 0:
                 card.set_selected(True)
-                self.selected_format_id = qinfo["format_id"]
+                self.selected_quality = qinfo.get("height", "auto")
 
     def _parse_formats(self):
         """Parse yt-dlp formats into card-friendly options."""
         options = [{
             "format_id": "auto",
+            "height": "auto",
             "resolution": "Best Available",
             "video_codec": "Auto Select",
             "size_estimate": "Best",
@@ -436,6 +439,7 @@ class QualitySelector(QWidget):
 
             options.append({
                 "format_id": fmt.get('format_id', 'unknown'),
+                "height": str(height),
                 "resolution": res_label,
                 "video_codec": codec_name,
                 "size_estimate": size_str,
@@ -445,12 +449,13 @@ class QualitySelector(QWidget):
         return options
 
     def _on_card_selected(self, format_id):
-        self.selected_format_id = format_id
         for card in self.quality_cards:
+            if card.format_id == format_id:
+                self.selected_quality = card.height
             card.set_selected(card.format_id == format_id)
 
     def get_selected_quality(self):
-        return self.selected_format_id
+        return self.selected_quality
 
 
 class ProgressWidget(QWidget):
@@ -536,7 +541,17 @@ class ProgressWidget(QWidget):
     def update_progress(self, progress, status):
         self.progress_bar.setValue(int(progress))
         self.percent_label.setText(f"{int(progress)}%")
-        self.speed_label.setText(status)
+
+        # Parse rich status: "speed | downloaded/total | ETA Xs"
+        parts = [p.strip() for p in status.split("|")]
+        if len(parts) >= 1:
+            self.speed_label.setText(parts[0])       # e.g. "2.50 MB/s"
+        if len(parts) >= 2:
+            self.bytes_label.setText(parts[1])        # e.g. "45.2 MB/120.0 MB"
+        if len(parts) >= 3:
+            self.eta_label.setText(parts[2])           # e.g. "ETA 30s"
+        else:
+            self.eta_label.setText("")
 
     def download_complete(self):
         self.speed_label.setText("✅ Download completed!")
@@ -545,8 +560,13 @@ class ProgressWidget(QWidget):
         self.pause_btn.setVisible(False)
         self.cancel_btn.setText("Close")
 
-    def download_failed(self):
-        self.speed_label.setText("❌ Download failed!")
+    def download_failed(self, error_msg=""):
+        display_msg = "Download failed!"
+        if error_msg:
+            # Truncate long error messages for UI display
+            short_err = error_msg[:120] + "..." if len(error_msg) > 120 else error_msg
+            display_msg = f"Download failed: {short_err}"
+        self.speed_label.setText(display_msg)
         self.speed_label.setStyleSheet("color: #ffb4ab;")
         self.pause_btn.setVisible(False)
         self.cancel_btn.setText("Close")

@@ -7,6 +7,9 @@ import sys
 import os
 import pyperclip
 from pathlib import Path
+from app_logger import get_logger
+
+log = get_logger(__name__)
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -396,13 +399,15 @@ class YouTubeDownloaderApp(QMainWindow):
         self.right_panel.show()
 
         self.fetch_btn.setEnabled(True)
-        self.fetch_btn.setText("🔍  Fetch Info")
+        self.fetch_btn.setText("Fetch Info")
         self.statusBar().showMessage("Video information loaded successfully")
+        log.info("Video info loaded: %s", info.get('title', 'Unknown'))
 
     def _on_fetch_error(self, error_msg):
         self.fetch_btn.setEnabled(True)
-        self.fetch_btn.setText("🔍  Fetch Info")
+        self.fetch_btn.setText("Fetch Info")
         self.statusBar().showMessage("Failed to fetch video information")
+        log.error("Fetch error: %s", error_msg)
         QMessageBox.critical(self, "Error", f"Failed to fetch video info: {error_msg}")
 
     def _show_quality_selector(self, formats):
@@ -464,11 +469,17 @@ class YouTubeDownloaderApp(QMainWindow):
         )
         self.download_thread.download_completed.connect(progress_widget.download_complete)
         self.download_thread.download_completed.connect(
-            lambda: self.downloads_page.complete_download(dl_id, title[:50], "—")
+            lambda: self.downloads_page.complete_download(dl_id, title[:50], "--")
         )
-        self.download_thread.download_failed.connect(progress_widget.download_failed)
+        self.download_thread.download_failed.connect(
+            lambda err: progress_widget.download_failed(err)
+        )
+        self.download_thread.download_failed.connect(
+            lambda err: log.error("Download failed for '%s': %s", title[:50], err)
+        )
         self.download_thread.start()
 
+        log.info("Download started for: %s (quality=%s)", title[:50], quality)
         self.statusBar().showMessage("Download started...")
 
     def closeEvent(self, event):
@@ -501,7 +512,7 @@ class VideoInfoThread(QThread):
 class DownloadThread(QThread):
     progress_updated = Signal(int, str)
     download_completed = Signal()
-    download_failed = Signal()
+    download_failed = Signal(str)
 
     def __init__(self, url, quality, output_path, audio_only, downloader):
         super().__init__()
@@ -516,17 +527,22 @@ class DownloadThread(QThread):
             self.progress_updated.emit(int(progress), status)
 
         try:
-            success = self.downloader.download_video(
+            result = self.downloader.download_video(
                 self.url, self.quality, self.output_path,
                 self.audio_only, progress_callback
             )
+            # Handle both old (bool) and new (tuple) return formats
+            if isinstance(result, tuple):
+                success, error_msg = result
+            else:
+                success, error_msg = result, None
+
             if success:
                 self.download_completed.emit()
             else:
-                self.download_failed.emit()
+                self.download_failed.emit(error_msg or "Unknown error")
         except Exception as e:
-            print(f"Download error: {e}")
-            self.download_failed.emit()
+            self.download_failed.emit(str(e))
 
 
 def main():

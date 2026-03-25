@@ -1,51 +1,171 @@
 import yt_dlp
 import os
 import sys
+import re
 from pathlib import Path
+from app_logger import get_logger
+
+log = get_logger(__name__)
+
+
+def _format_bytes(num_bytes):
+    """Format bytes into human-readable string."""
+    if not num_bytes:
+        return "?"
+    if num_bytes >= 1_073_741_824:
+        return f"{num_bytes / 1_073_741_824:.1f} GB"
+    elif num_bytes >= 1_048_576:
+        return f"{num_bytes / 1_048_576:.1f} MB"
+    elif num_bytes >= 1024:
+        return f"{num_bytes / 1024:.0f} KB"
+    return f"{num_bytes} B"
+
+
+def _format_speed(speed):
+    """Format download speed into human-readable string."""
+    if not speed:
+        return "-- MB/s"
+    speed_mb = speed / (1024 * 1024)
+    if speed_mb >= 1:
+        return f"{speed_mb:.2f} MB/s"
+    speed_kb = speed / 1024
+    return f"{speed_kb:.1f} KB/s"
+
+
+class YtDlpLogger:
+    """Custom logger that captures yt-dlp output and drives progress updates."""
+
+    def __init__(self, progress_callback=None):
+        self.progress_callback = progress_callback
+
+    def debug(self, msg):
+        # yt-dlp sends download progress as debug messages
+        log.debug("yt-dlp: %s", msg)
+        if self.progress_callback and '[download]' in msg:
+            self._parse_progress_line(msg)
+
+    def info(self, msg):
+        log.info("yt-dlp: %s", msg)
+
+    def warning(self, msg):
+        log.warning("yt-dlp: %s", msg)
+
+    def error(self, msg):
+        log.error("yt-dlp: %s", msg)
+
+    def _parse_progress_line(self, msg):
+        """Parse yt-dlp [download] lines like:
+        [download]  45.2% of  120.50MiB at  5.23MiB/s ETA 00:12
+        [download] 100% of  120.50MiB in 00:23
+        [download] Destination: /path/to/file.mp4
+        """
+        try:
+            # Match: XX.X% of XXXMiB at XXXMiB/s ETA XX:XX
+            match = re.search(
+                r'(\d+\.?\d*)%\s+of\s+~?([\d.]+)(\w+)\s+at\s+([\d.]+)(\w+/s)\s+ETA\s+(\S+)',
+                msg
+            )
+            if match:
+                percent = float(match.group(1))
+                total_size = match.group(2) + match.group(3)
+                speed = match.group(4) + " " + match.group(5)
+                eta = match.group(6)
+
+                status = f"{speed} | {total_size} | ETA {eta}"
+                self.progress_callback(percent, status)
+                return
+
+            # Match: 100% of XXXMiB in XX:XX
+            match = re.search(
+                r'100%\s+of\s+~?([\d.]+)(\w+)\s+in\s+(\S+)',
+                msg
+            )
+            if match:
+                total_size = match.group(1) + match.group(2)
+                self.progress_callback(95, f"Processing... ({total_size})")
+                return
+
+        except Exception as e:
+            log.debug("Progress parse error: %s", e)
+
 
 class VideoDownloader:
     def __init__(self):
         self.current_download = None
         self.setup_ffmpeg_path()
-    
+        self._cookie_browser = self._detect_cookie_browser()
+
     def setup_ffmpeg_path(self):
         """Setup FFmpeg path for both development and packaged app"""
         if getattr(sys, 'frozen', False):
-            # Running as compiled executable
             base_path = Path(sys.executable).parent
         else:
-            # Running as Python script
             base_path = Path(__file__).parent.parent
-        
-        # Look for ffmpeg in multiple locations
+
         ffmpeg_locations = [
-            base_path / 'ffmpeg.exe',           # Same directory as exe
-            base_path / 'tools' / 'ffmpeg.exe', # tools subfolder
-            'ffmpeg.exe'                        # System PATH
+            base_path / 'ffmpeg.exe',
+            base_path / 'tools' / 'ffmpeg.exe',
+            'ffmpeg.exe'
         ]
-        
+
         self.ffmpeg_path = None
         for location in ffmpeg_locations:
             if Path(location).exists():
                 self.ffmpeg_path = str(location)
                 break
-    
+
+        if self.ffmpeg_path:
+            log.info("FFmpeg found at: %s", self.ffmpeg_path)
+        else:
+            log.warning("FFmpeg NOT FOUND - video+audio merging will be unavailable")
+
+    def _detect_cookie_browser(self):
+        """Try each browser to find one whose cookies are accessible."""
+        for browser in ('edge', 'chrome', 'firefox', 'brave', 'opera'):
+            try:
+                test_opts = {'cookiesfrombrowser': (browser,), 'quiet': True}
+                with yt_dlp.YoutubeDL(test_opts) as ydl:
+                    # Force cookie jar creation to verify access
+                    _ = ydl.cookiejar
+                log.info("Browser cookies available: %s", browser)
+                return browser
+            except Exception as e:
+                log.debug("Cannot use %s cookies: %s", browser, e)
+                continue
+        log.warning("No browser cookies available - requests may be rate-limited by YouTube")
+        return None
+
+    def _get_base_opts(self, progress_callback=None):
+        """Common yt-dlp options shared across info fetching and downloading."""
+        opts = {
+            'no_warnings': True,
+            # Use custom logger to capture all yt-dlp output for progress
+            'logger': YtDlpLogger(progress_callback),
+        }
+        if self._cookie_browser:
+            opts['cookiesfrombrowser'] = (self._cookie_browser,)
+        return opts
+
     def get_video_info(self, url):
         """Get video information without downloading"""
+        log.info("Fetching video info for: %s", url)
+        opts = self._get_base_opts()
         try:
-            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
+                log.info("Video info fetched: %s", info.get('title', 'Unknown'))
                 return info
         except Exception as e:
-            print(f"Error getting video info: {e}")
+            log.error("Failed to fetch video info: %s", e, exc_info=True)
             return None
-    
+
     def download_video(self, url, quality, output_path, audio_only=False, progress_callback=None):
         """Download video with advanced quality selection support"""
-        
+        log.info("Download requested - quality='%s', audio_only=%s, url=%s", quality, audio_only, url)
+
         # Store progress callback for use in _progress_hook
         self.progress_callback = progress_callback
-        
+
         if audio_only:
             format_selector = 'bestaudio/best'
             postprocessors = [{
@@ -54,91 +174,102 @@ class VideoDownloader:
                 'preferredquality': '192',
             }]
         else:
-            # Handle advanced format combinations
             if '+' in quality:
-                # Advanced mode: specific video+audio combination
                 format_selector = quality
             elif quality == "auto":
-                # Auto mode: best available
                 format_selector = 'bestvideo+bestaudio/best'
             elif quality in ['best', 'worst']:
-                # Simple quality selection
                 format_selector = quality
             else:
-                # Specific resolution
                 format_selector = f'bestvideo[height<={quality}]+bestaudio/best[height<={quality}]/best'
-            
+
             postprocessors = [{
                 'key': 'FFmpegVideoConvertor',
                 'preferedformat': 'mp4'
             }]
-        
-        # Configure yt-dlp options
-        ydl_opts = {
+
+        # Filename includes quality tag: "Video Title [1080p].mp4"
+        quality_tag = f"{quality}p" if quality not in ('auto', 'best', 'worst') and '+' not in quality else "best"
+        outtmpl = os.path.join(output_path, f'%(title)s [{quality_tag}].%(ext)s')
+
+        # Build options (includes cookies + logger for progress)
+        ydl_opts = self._get_base_opts(progress_callback)
+        ydl_opts.update({
             'format': format_selector,
-            'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
+            'outtmpl': outtmpl,
             'noplaylist': True,
             'extract_flat': False,
             'postprocessors': postprocessors,
             'merge_output_format': 'mp4',
-        }
-        
-        # Add FFmpeg path if available
+            'overwrites': True,
+        })
+
+        # Add FFmpeg path
         if self.ffmpeg_path:
             ydl_opts['ffmpeg_location'] = self.ffmpeg_path
-            print(f"Using FFmpeg from: {self.ffmpeg_path}")
+            log.info("Using FFmpeg from: %s", self.ffmpeg_path)
         else:
-            print("FFmpeg not found - using fallback format selection")
-            # Use single format selection to avoid merging
-            ydl_opts['format'] = 'best[ext=mp4]/best'
-        
-        # Add progress hook if callback provided
+            log.warning("FFmpeg not found - using single-stream fallback")
+            if quality not in ('auto', 'best', 'worst') and '+' not in quality:
+                ydl_opts['format'] = f'best[height<={quality}][ext=mp4]/best[ext=mp4]/best'
+            else:
+                ydl_opts['format'] = 'best[ext=mp4]/best'
+
+        # Also add progress hooks as secondary progress source
         if progress_callback:
             ydl_opts['progress_hooks'] = [self._progress_hook]
-        
+
+        log.info("Format selector: %s", ydl_opts['format'])
+
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
-            return True
+            log.info("Download completed successfully")
+            return True, None
         except Exception as e:
-            print(f"Download error: {e}")
-            return False
-    
+            log.error("Download failed: %s", e, exc_info=True)
+            return False, str(e)
+
     def _progress_hook(self, d):
-        """Handle download progress updates from yt-dlp"""
+        """Handle download progress updates from yt-dlp (secondary source)."""
         if not hasattr(self, 'progress_callback') or not self.progress_callback:
             return
-        
+
         try:
             status = d.get('status', 'unknown')
-            
+
             if status == 'downloading':
-                if 'downloaded_bytes' in d and 'total_bytes' in d:
-                    progress = (d['downloaded_bytes'] / d['total_bytes']) * 100
-                    speed = d.get('speed', 0)
-                    
-                    # Format speed
-                    if speed:
-                        speed_mb = speed / (1024 * 1024)
-                        if speed_mb >= 1:
-                            speed_str = f"{speed_mb:.2f} MB/s"
-                        else:
-                            speed_kb = speed / 1024
-                            speed_str = f"{speed_kb:.1f} KB/s"
-                    else:
-                        speed_str = "Unknown speed"
-                    
-                    # Call the progress callback
-                    self.progress_callback(progress, f"📥 Downloading... {speed_str}")
+                downloaded = d.get('downloaded_bytes', 0) or 0
+                total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
+                speed = d.get('speed', 0) or 0
+                eta = d.get('eta', None)
+
+                if total > 0:
+                    progress = min((downloaded / total) * 100, 100)
                 else:
-                    # No byte information available
-                    self.progress_callback(0, "📥 Downloading...")
-                    
+                    progress = 0
+
+                speed_str = _format_speed(speed)
+                total_str = _format_bytes(total) if total else "?"
+                downloaded_str = _format_bytes(downloaded)
+
+                eta_str = ""
+                if eta:
+                    if eta >= 3600:
+                        eta_str = f" | ETA {eta // 3600}h {(eta % 3600) // 60}m"
+                    elif eta >= 60:
+                        eta_str = f" | ETA {eta // 60}m {eta % 60}s"
+                    else:
+                        eta_str = f" | ETA {eta}s"
+
+                status_msg = f"{speed_str} | {downloaded_str}/{total_str}{eta_str}"
+                self.progress_callback(progress, status_msg)
+
             elif status == 'finished':
-                self.progress_callback(95, "🔄 Processing and merging...")
-                
+                filesize = d.get('total_bytes') or d.get('total_bytes_estimate') or d.get('downloaded_bytes', 0)
+                size_str = _format_bytes(filesize)
+                log.info("Stream finished, size: %s. Merging/processing...", size_str)
+                self.progress_callback(95, f"Processing... ({size_str})")
+
         except Exception as e:
-            print(f"Progress hook error: {e}")
-            # Fallback - just call with basic info
-            if hasattr(self, 'progress_callback') and self.progress_callback:
-                self.progress_callback(50, "Downloading...")
+            log.warning("Progress hook error: %s", e)
