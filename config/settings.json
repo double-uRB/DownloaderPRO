@@ -6,7 +6,7 @@
   "window_geometry": "900x650",
   "filename_pattern": "{date}_{filename}.{ext}",
   "auto_resume": true,
-  "max_concurrent": 5,
+  "max_concurrent": 10,
   "speed_limit": 0,
-  "thread_intensity": "high"
+  "thread_intensity": "extreme"
 }
