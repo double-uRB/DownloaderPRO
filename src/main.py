@@ -9,6 +9,14 @@ import pyperclip
 from pathlib import Path
 from app_logger import get_logger
 
+if sys.platform == "win32":
+    import ctypes
+    myappid = "downloaderpro.app.1.0"
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    except Exception:
+        pass
+
 log = get_logger(__name__)
 
 from PySide6.QtWidgets import (
@@ -52,6 +60,11 @@ class YouTubeDownloaderApp(QMainWindow):
         self.setWindowTitle("Downloader PRO")
         self.setMinimumSize(1000, 650)
         self.resize(1100, 750)
+        
+        # Set window icon (taskbar)
+        icon_path = Path(__file__).parent.parent / "assets" / "logo.ico"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
 
     def _setup_ui(self):
         """Create the sidebar + main content layout."""

@@ -7,7 +7,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpacerItem
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QPixmap
+from pathlib import Path
 
 
 class NavButton(QPushButton):
@@ -67,9 +68,16 @@ class Sidebar(QWidget):
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
 
-        app_icon = QLabel("⬇️")
-        app_icon.setFont(QFont("Segoe UI", 22))
+        app_icon = QLabel()
         app_icon.setFixedSize(36, 36)
+        logo_path = Path(__file__).parent.parent / "assets" / "logo.png"
+        if logo_path.exists():
+            pixmap = QPixmap(str(logo_path))
+            app_icon.setPixmap(pixmap.scaled(36, 36, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        else:
+            app_icon.setText("⬇️")
+            app_icon.setFont(QFont("Segoe UI", 22))
+        
         app_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_row.addWidget(app_icon)
 
