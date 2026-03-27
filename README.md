@@ -1,4 +1,4 @@
-# YouTube Downloader PRO
+# Downloader PRO
 
 A modern, professional YouTube video and audio downloader built with Python and PySide6. Features a clean, glassmorphic GUI with dark/light themes, detailed quality selection, and robust progress tracking powered by `yt-dlp` and `FFmpeg`.
 
@@ -12,6 +12,17 @@ A modern, professional YouTube video and audio downloader built with Python and 
 - **Browser Cookie Integration**: Bypasses YouTube's rate-limiting automatically by reading browser cookies.
 - **Clipboard Integration**: Quick-paste button for URLs.
 - **Persistent Settings**: Remembers your preferred download location and theme.
+### [DownloaderPRO](https://github.com/double-uRB) &nbsp; ![Python](https://img.shields.io/badge/-Python-3776AB?style=flat-square&logo=python&logoColor=white) ![PySide6](https://img.shields.io/badge/-PySide6-41CD52?style=flat-square&logo=qt&logoColor=white) ![FFmpeg](https://img.shields.io/badge/-FFmpeg-007808?style=flat-square) ![aria2](https://img.shields.io/badge/-aria2-333333?style=flat-square) ![yt--dlp](https://img.shields.io/badge/-yt--dlp-FF0000?style=flat-square&logo=youtube&logoColor=white)
+> A modern desktop video downloader with a clean GUI and rich feature set
+
+| Feature | Details |
+|---|---|
+| 🎨 Themes | Light & dark mode support |
+| 📹 Quality | 4K, 1080p, 720p options |
+| 🎵 Audio | MP3 extraction via FFmpeg media pipeline |
+| ⚡ Engine | aria2c multi-connection download engine |
+| 🔗 Extraction | yt-dlp for stream URL parsing & format selection |
+| 💾 Storage | Persistent user preferences |
 
 ## 🖼️ Screenshots
 
