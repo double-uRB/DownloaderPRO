@@ -114,7 +114,7 @@ def build_executable():
     ]
     
     # Add icon if available
-    icon_path = Path("assets/app_icon.ico")
+    icon_path = Path("assets/logo.ico")
     if icon_path.exists():
         cmd.extend(["--icon", str(icon_path)])
     

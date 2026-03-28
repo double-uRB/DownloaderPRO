@@ -112,7 +112,7 @@ class YouTubeDownloaderApp(QMainWindow):
         """Top bar with page title, theme toggle, and user avatar."""
         header = QWidget()
         header.setObjectName("top_header")
-        header.setFixedHeight(56)
+        header.setMinimumHeight(56)
 
         h_layout = QHBoxLayout(header)
         h_layout.setContentsMargins(24, 0, 24, 0)
@@ -143,16 +143,25 @@ class YouTubeDownloaderApp(QMainWindow):
         toggle_layout.setContentsMargins(4, 4, 4, 4)
         toggle_layout.setSpacing(0)
 
-        self.light_icon = QLabel("☀️")
-        self.light_icon.setFont(QFont("Segoe UI", 10))
+        from PySide6.QtGui import QIcon
+        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
+
+        self.light_icon = QLabel()
+        if (icon_dir / "sun.svg").exists():
+            self.light_icon.setPixmap(QIcon(str(icon_dir / "sun.svg")).pixmap(18, 18))
+        else:
+            self.light_icon.setText("S")
         self.light_icon.setFixedSize(22, 22)
         self.light_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         toggle_layout.addWidget(self.light_icon)
 
         toggle_layout.addStretch()
 
-        self.dark_icon = QLabel("🌙")
-        self.dark_icon.setFont(QFont("Segoe UI", 10))
+        self.dark_icon = QLabel()
+        if (icon_dir / "moon.svg").exists():
+            self.dark_icon.setPixmap(QIcon(str(icon_dir / "moon.svg")).pixmap(16, 16))
+        else:
+            self.dark_icon.setText("M")
         self.dark_icon.setFixedSize(22, 22)
         self.dark_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         toggle_layout.addWidget(self.dark_icon)
@@ -163,8 +172,11 @@ class YouTubeDownloaderApp(QMainWindow):
         h_layout.addWidget(toggle_container)
 
         # User avatar placeholder
-        avatar = QLabel("👤")
-        avatar.setFont(QFont("Segoe UI", 14))
+        avatar = QLabel()
+        if (icon_dir / "user.svg").exists():
+            avatar.setPixmap(QIcon(str(icon_dir / "user.svg")).pixmap(20, 20))
+        else:
+            avatar.setText("U")
         avatar.setFixedSize(34, 34)
         avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         avatar.setStyleSheet("background-color: #2d3449; border-radius: 17px; border: 1px solid rgba(76, 215, 246, 0.2);")
@@ -193,8 +205,12 @@ class YouTubeDownloaderApp(QMainWindow):
         url_layout.setSpacing(12)
 
         url_title_row = QHBoxLayout()
-        link_icon = QLabel("🔗")
-        link_icon.setFont(QFont("Segoe UI", 16))
+        link_icon = QLabel()
+        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
+        if (icon_dir / "link.svg").exists():
+            link_icon.setPixmap(QIcon(str(icon_dir / "link.svg")).pixmap(20, 20))
+        else:
+            link_icon.setText("L")
         url_title_row.addWidget(link_icon)
         url_title = QLabel("Paste Video URL")
         url_title.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
@@ -214,13 +230,17 @@ class YouTubeDownloaderApp(QMainWindow):
 
         self.url_entry = QLineEdit()
         self.url_entry.setPlaceholderText("https://youtube.com/watch?v=...")
-        self.url_entry.setFixedHeight(46)
+        self.url_entry.setMinimumHeight(46)
         self.url_entry.setFont(QFont("Segoe UI", 12))
         url_input_layout.addWidget(self.url_entry)
 
-        paste_btn = QPushButton("📋 Paste")
+        paste_btn = QPushButton(" Paste")
+        if (icon_dir / "clipboard.svg").exists():
+            from PySide6.QtCore import QSize
+            paste_btn.setIcon(QIcon(str(icon_dir / "clipboard.svg")))
+            paste_btn.setIconSize(QSize(16, 16))
         paste_btn.setObjectName("paste_button")
-        paste_btn.setFixedSize(80, 30)
+        paste_btn.setMinimumHeight(30)
         paste_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         paste_btn.clicked.connect(self._paste_url)
         url_input_layout.addWidget(paste_btn)
@@ -228,9 +248,12 @@ class YouTubeDownloaderApp(QMainWindow):
         input_row.addWidget(url_input_container)
 
         # Fetch button
-        self.fetch_btn = QPushButton("🔍  Fetch Info")
+        self.fetch_btn = QPushButton(" Fetch Info")
+        if (icon_dir / "search.svg").exists():
+            self.fetch_btn.setIcon(QIcon(str(icon_dir / "search.svg")))
+            self.fetch_btn.setIconSize(QSize(20, 20))
         self.fetch_btn.setObjectName("primary_button")
-        self.fetch_btn.setFixedSize(140, 46)
+        self.fetch_btn.setMinimumSize(140, 46)
         self.fetch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.fetch_btn.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         self.fetch_btn.clicked.connect(self._fetch_video_info)
@@ -281,7 +304,12 @@ class YouTubeDownloaderApp(QMainWindow):
         self.path_display.setMaximumWidth(250)
         path_row.addWidget(self.path_display, stretch=1)
 
-        browse_btn = QPushButton("📁")
+        browse_btn = QPushButton("")
+        if (icon_dir / "folder.svg").exists():
+            browse_btn.setIcon(QIcon(str(icon_dir / "folder.svg")))
+            browse_btn.setIconSize(QSize(20, 20))
+        else:
+            browse_btn.setText("F")
         browse_btn.setFixedSize(38, 34)
         browse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         browse_btn.clicked.connect(self._browse_folder)
@@ -291,8 +319,11 @@ class YouTubeDownloaderApp(QMainWindow):
 
         # Audio only toggle
         audio_row = QHBoxLayout()
-        audio_icon = QLabel("🎵")
-        audio_icon.setFont(QFont("Segoe UI", 14))
+        audio_icon = QLabel()
+        if (icon_dir / "music.svg").exists():
+            audio_icon.setPixmap(QIcon(str(icon_dir / "music.svg")).pixmap(22, 22))
+        else:
+            audio_icon.setText("M")
         audio_row.addWidget(audio_icon)
 
         audio_label = QLabel("Audio (MP3)")
@@ -307,9 +338,12 @@ class YouTubeDownloaderApp(QMainWindow):
         actions_layout.addLayout(audio_row)
 
         # Download button
-        self.download_btn = QPushButton("⬇️  Download")
+        self.download_btn = QPushButton("  Download")
+        if (icon_dir / "download.svg").exists():
+            self.download_btn.setIcon(QIcon(str(icon_dir / "download.svg")))
+            self.download_btn.setIconSize(QSize(24, 24))
         self.download_btn.setObjectName("download_button")
-        self.download_btn.setFixedHeight(52)
+        self.download_btn.setMinimumHeight(52)
         self.download_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.download_btn.setFont(QFont("Segoe UI", 15, QFont.Weight.Black))
         self.download_btn.clicked.connect(self._start_download)
@@ -384,19 +418,46 @@ class YouTubeDownloaderApp(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to paste: {str(e)}")
 
     def _fetch_video_info(self):
+        if hasattr(self, "fetch_thread") and self.fetch_thread.isRunning():
+            self._cancel_fetch()
+            return
+
         url = self.url_entry.text().strip()
         if not url:
             QMessageBox.critical(self, "Error", "Please enter a YouTube URL")
             return
 
         self.statusBar().showMessage("Fetching video information...")
-        self.fetch_btn.setEnabled(False)
-        self.fetch_btn.setText("Loading...")
-
+        self.fetch_btn.setText(" Stop Fetch")
+        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
+        if (icon_dir / "x.svg").exists():
+            from PySide6.QtGui import QIcon
+            from PySide6.QtCore import QSize
+            self.fetch_btn.setIcon(QIcon(str(icon_dir / "x.svg")))
+            self.fetch_btn.setIconSize(QSize(16, 16))
+        
         self.fetch_thread = VideoInfoThread(url, self.downloader)
         self.fetch_thread.info_fetched.connect(self._on_video_info_fetched)
         self.fetch_thread.error_occurred.connect(self._on_fetch_error)
         self.fetch_thread.start()
+
+    def _cancel_fetch(self):
+        if hasattr(self, "fetch_thread") and self.fetch_thread.isRunning():
+            self.statusBar().showMessage("Stopping fetch...")
+            self.fetch_thread.terminate()
+            self.fetch_thread.wait()
+            self._reset_fetch_btn()
+            self.statusBar().showMessage("Fetch cancelled")
+
+    def _reset_fetch_btn(self):
+        self.fetch_btn.setEnabled(True)
+        self.fetch_btn.setText(" Fetch Info")
+        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
+        if (icon_dir / "search.svg").exists():
+            from PySide6.QtGui import QIcon
+            from PySide6.QtCore import QSize
+            self.fetch_btn.setIcon(QIcon(str(icon_dir / "search.svg")))
+            self.fetch_btn.setIconSize(QSize(20, 20))
 
     def _on_video_info_fetched(self, info):
         self.current_video_info = info
@@ -411,14 +472,12 @@ class YouTubeDownloaderApp(QMainWindow):
         # Show right panel
         self.right_panel.show()
 
-        self.fetch_btn.setEnabled(True)
-        self.fetch_btn.setText("Fetch Info")
+        self._reset_fetch_btn()
         self.statusBar().showMessage("Video information loaded successfully")
         log.info("Video info loaded: %s", info.get('title', 'Unknown'))
 
     def _on_fetch_error(self, error_msg):
-        self.fetch_btn.setEnabled(True)
-        self.fetch_btn.setText("Fetch Info")
+        self._reset_fetch_btn()
         self.statusBar().showMessage("Failed to fetch video information")
         log.error("Fetch error: %s", error_msg)
         QMessageBox.critical(self, "Error", f"Failed to fetch video info: {error_msg}")

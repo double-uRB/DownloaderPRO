@@ -93,6 +93,7 @@ class VideoDownloader:
     def __init__(self):
         self.current_download = None
         self.setup_ffmpeg_path()
+        self.setup_aria2_path()
         self._cookie_browser = self._detect_cookie_browser()
 
     def setup_ffmpeg_path(self):
@@ -119,6 +120,33 @@ class VideoDownloader:
         else:
             log.warning("FFmpeg NOT FOUND - video+audio merging will be unavailable")
 
+    def setup_aria2_path(self):
+        """Setup aria2c path for both development and packaged app"""
+        import shutil
+        if getattr(sys, 'frozen', False):
+            base_path = Path(sys.executable).parent
+        else:
+            base_path = Path(__file__).parent.parent
+
+        aria2_locations = [
+            base_path / 'aria2c.exe',
+            base_path / 'tools' / 'aria2c.exe',
+        ]
+
+        self.aria2_path = None
+        for location in aria2_locations:
+            if Path(location).exists():
+                self.aria2_path = str(location)
+                return
+
+        if shutil.which('aria2c'):
+            self.aria2_path = 'aria2c'
+            
+        if self.aria2_path:
+            log.info("aria2c found for multithreaded downloads at: %s", self.aria2_path)
+        else:
+            log.warning("aria2c NOT FOUND - falling back to native yt-dlp downloading")
+
     def _detect_cookie_browser(self):
         """Try each browser to find one whose cookies are accessible."""
         for browser in ('edge', 'chrome', 'firefox', 'brave', 'opera'):
@@ -141,6 +169,8 @@ class VideoDownloader:
             'no_warnings': True,
             # Use custom logger to capture all yt-dlp output for progress
             'logger': YtDlpLogger(progress_callback),
+            # Bypass client-side blocking (The following content is not available on this app)
+            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
         }
         if self._cookie_browser:
             opts['cookiesfrombrowser'] = (self._cookie_browser,)
@@ -214,6 +244,15 @@ class VideoDownloader:
                 ydl_opts['format'] = f'best[height<={quality}][ext=mp4]/best[ext=mp4]/best'
             else:
                 ydl_opts['format'] = 'best[ext=mp4]/best'
+
+        # Add external downloader (aria2c) if available
+        if getattr(self, 'aria2_path', None):
+            ydl_opts['external_downloader'] = self.aria2_path
+            ydl_opts['external_downloader_args'] = ['-x', '16', '-s', '16', '-k', '1M']
+            log.info("Using aria2c for multithreaded downloading")
+        else:
+            # Fallback to yt-dlp native concurrent fragment downloading
+            ydl_opts['concurrent_fragment_downloads'] = 5
 
         # Also add progress hooks as secondary progress source
         if progress_callback:

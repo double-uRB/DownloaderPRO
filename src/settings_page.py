@@ -6,10 +6,11 @@ Storage & Location, Task Management, Network Optimization, and Theme selector.
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QCheckBox, QSlider, QComboBox, QFileDialog,
-    QScrollArea, QFrame, QSizePolicy
+    QScrollArea, QFrame, QSizePolicy, QButtonGroup
 )
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtGui import QFont, QIcon
+from pathlib import Path
 
 
 class SettingsPage(QWidget):
@@ -23,6 +24,16 @@ class SettingsPage(QWidget):
         self.settings = settings_manager
         self._setup_ui()
         self._load_current_settings()
+
+    def _create_icon_label(self, emoji: str, icon_name: str, size: int = 24) -> QLabel:
+        label = QLabel()
+        p = Path(__file__).parent.parent / "assets" / "icons" / f"{icon_name}.svg"
+        if p.exists():
+            label.setPixmap(QIcon(str(p)).pixmap(size, size))
+        else:
+            label.setText(emoji)
+            label.setFont(QFont("Segoe UI", size - 8))
+        return label
 
     def _setup_ui(self):
         scroll = QScrollArea()
@@ -60,8 +71,7 @@ class SettingsPage(QWidget):
         storage_layout.setSpacing(16)
 
         storage_title_row = QHBoxLayout()
-        storage_icon = QLabel("📁")
-        storage_icon.setFont(QFont("Segoe UI", 16))
+        storage_icon = self._create_icon_label("📁", "folder")
         storage_title_row.addWidget(storage_icon)
         storage_title = QLabel("Storage & Location")
         storage_title.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
@@ -78,13 +88,13 @@ class SettingsPage(QWidget):
         path_row = QHBoxLayout()
         path_row.setSpacing(10)
         self.path_input = QLineEdit()
-        self.path_input.setFixedHeight(42)
+        self.path_input.setMinimumHeight(36)
         self.path_input.setFont(QFont("Consolas", 11))
         self.path_input.setReadOnly(True)
         path_row.addWidget(self.path_input)
 
         change_btn = QPushButton("Change")
-        change_btn.setFixedHeight(42)
+        change_btn.setMinimumHeight(36)
         change_btn.setFixedWidth(90)
         change_btn.clicked.connect(self._browse_folder)
         path_row.addWidget(change_btn)
@@ -97,7 +107,7 @@ class SettingsPage(QWidget):
         storage_layout.addWidget(pattern_label)
 
         self.pattern_input = QLineEdit("{date}_{filename}.{ext}")
-        self.pattern_input.setFixedHeight(42)
+        self.pattern_input.setMinimumHeight(36)
         self.pattern_input.setFont(QFont("Consolas", 11))
         storage_layout.addWidget(self.pattern_input)
 
@@ -117,8 +127,7 @@ class SettingsPage(QWidget):
         task_layout.setSpacing(16)
 
         task_title_row = QHBoxLayout()
-        task_icon = QLabel("📋")
-        task_icon.setFont(QFont("Segoe UI", 16))
+        task_icon = self._create_icon_label("📋", "clipboard")
         task_title_row.addWidget(task_icon)
         task_title = QLabel("Task Management")
         task_title.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
@@ -184,8 +193,7 @@ class SettingsPage(QWidget):
         network_layout.setSpacing(16)
 
         net_title_row = QHBoxLayout()
-        net_icon = QLabel("⚡")
-        net_icon.setFont(QFont("Segoe UI", 16))
+        net_icon = self._create_icon_label("⚡", "zap")
         net_title_row.addWidget(net_icon)
         net_title = QLabel("Network Optimization")
         net_title.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
@@ -206,7 +214,7 @@ class SettingsPage(QWidget):
 
         speed_row = QHBoxLayout()
         self.speed_limit_input = QLineEdit("0")
-        self.speed_limit_input.setFixedHeight(42)
+        self.speed_limit_input.setMinimumHeight(36)
         self.speed_limit_input.setFont(QFont("Segoe UI", 12))
         speed_row.addWidget(self.speed_limit_input)
 
@@ -233,7 +241,7 @@ class SettingsPage(QWidget):
         thread_col.addWidget(thread_label)
 
         self.thread_combo = QComboBox()
-        self.thread_combo.setFixedHeight(42)
+        self.thread_combo.setMinimumHeight(36)
         self.thread_combo.addItems([
             "Low - 2 Threads",
             "Medium - 4 Threads",
@@ -269,9 +277,14 @@ class SettingsPage(QWidget):
         theme_grid.setSpacing(10)
 
         self.theme_buttons = {}
-        for icon, label, key in [("☀️", "Light", "light"), ("🌙", "Dark", "dark"), ("🔄", "Auto", "auto")]:
-            btn = QPushButton(f"{icon}\n{label}")
-            btn.setFixedSize(70, 70)
+        icon_map = {"light": "sun", "dark": "moon", "auto": "refresh"}
+        for icon, label, key in [("☀️", "Light", "light"), ("🌙", "Dark", "dark"), ("🔄", "System", "auto")]:
+            btn = QPushButton(f"  {label}")
+            p = Path(__file__).parent.parent / "assets" / "icons" / f"{icon_map[key]}.svg"
+            if p.exists():
+                btn.setIcon(QIcon(str(p)))
+                btn.setIconSize(QSize(20, 20))
+            btn.setMinimumHeight(64)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
             btn.setCheckable(True)
@@ -353,11 +366,18 @@ class SettingsPage(QWidget):
 
         footer = QWidget()
         footer.setObjectName("glass_panel")
-        footer.setFixedHeight(60)
+        footer.setMinimumHeight(60)
         footer_layout = QHBoxLayout(footer)
         footer_layout.setContentsMargins(28, 10, 28, 10)
 
-        unsaved_label = QLabel("ℹ️  Unsaved changes detected")
+        unsaved_icon = None
+        p = Path(__file__).parent.parent / "assets" / "icons" / "info.svg"
+        if p.exists():
+            unsaved_icon = QLabel()
+            unsaved_icon.setPixmap(QIcon(str(p)).pixmap(18, 18))
+            footer_layout.addWidget(unsaved_icon)
+            
+        unsaved_label = QLabel(" Unsaved changes detected" if unsaved_icon else "ℹ️  Unsaved changes detected")
         unsaved_label.setObjectName("section_subtitle")
         unsaved_label.setFont(QFont("Segoe UI", 11))
         footer_layout.addWidget(unsaved_label)

@@ -14,19 +14,27 @@ from pathlib import Path
 class NavButton(QPushButton):
     """A sidebar navigation button with icon + label."""
 
-    def __init__(self, icon: str, label: str, subtitle: str = "", parent=None):
+    def __init__(self, icon_name: str, label: str, subtitle: str = "", parent=None):
         super().__init__(parent)
-        self.icon_text = icon
         self.label_text = label
         self.subtitle_text = subtitle
         self.setObjectName("nav_item")
         self.setCheckable(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(52)
+        self.setMinimumHeight(48)
+        
+        # Load SVG icon
+        icon_path = Path(__file__).parent.parent / "assets" / "icons" / f"{icon_name}.svg"
+        from PySide6.QtGui import QIcon
+        from PySide6.QtCore import QSize
+        if icon_path.exists():
+            self.setIcon(QIcon(str(icon_path)))
+            self.setIconSize(QSize(20, 20))
+            
         self._update_text()
 
     def _update_text(self):
-        text = f"  {self.icon_text}   {self.label_text}"
+        text = f"  {self.label_text}"
         self.setText(text)
         self.setFont(QFont("Segoe UI", 11, QFont.Weight.DemiBold))
 
@@ -43,16 +51,17 @@ class Sidebar(QWidget):
     page_changed = Signal(str)
 
     PAGES = [
-        ("🏠", "Dashboard",  "dashboard"),
-        ("⬇️", "Downloads",  "downloads"),
-        ("⚙️", "Settings",   "settings"),
+        ("home", "Dashboard",  "dashboard"),
+        ("download", "Downloads",  "downloads"),
+        ("settings", "Settings",   "settings"),
     ]
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("sidebar")
-        self.setFixedWidth(240)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self.setMinimumWidth(220)
+        self.setMaximumWidth(280)
+        self.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Expanding)
         self.nav_buttons: dict[str, NavButton] = {}
         self._setup_ui()
 
@@ -75,8 +84,10 @@ class Sidebar(QWidget):
             pixmap = QPixmap(str(logo_path))
             app_icon.setPixmap(pixmap.scaled(36, 36, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         else:
-            app_icon.setText("⬇️")
-            app_icon.setFont(QFont("Segoe UI", 22))
+            fallback_path = Path(__file__).parent.parent / "assets" / "icons" / "download.svg"
+            if fallback_path.exists():
+                from PySide6.QtGui import QIcon
+                app_icon.setPixmap(QIcon(str(fallback_path)).pixmap(32, 32))
         
         app_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_row.addWidget(app_icon)
@@ -114,9 +125,15 @@ class Sidebar(QWidget):
         layout.addStretch()
 
         # ── CTA Button ──
-        new_download_btn = QPushButton("➕  NEW TASK")
+        new_download_btn = QPushButton("  NEW TASK")
+        from PySide6.QtGui import QIcon
+        from PySide6.QtCore import QSize
+        btn_icon_path = Path(__file__).parent.parent / "assets" / "icons" / "plus.svg"
+        if btn_icon_path.exists():
+            new_download_btn.setIcon(QIcon(str(btn_icon_path)))
+            new_download_btn.setIconSize(QSize(18, 18))
         new_download_btn.setObjectName("cta_button")
-        new_download_btn.setFixedHeight(48)
+        new_download_btn.setMinimumHeight(48)
         new_download_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         new_download_btn.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         new_download_btn.clicked.connect(lambda: self._on_nav_click("dashboard"))
@@ -131,8 +148,8 @@ class Sidebar(QWidget):
         layout.addWidget(sep)
         layout.addSpacing(8)
 
-        help_btn = NavButton("❓", "Help Center")
-        help_btn.setFixedHeight(40)
+        help_btn = NavButton("info", "Help Center")
+        help_btn.setMinimumHeight(40)
         layout.addWidget(help_btn)
 
         # ── Status indicator ──

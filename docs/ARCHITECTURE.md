@@ -22,11 +22,14 @@ The UI is built with a modern, glassmorphic design and consists of modular compo
 - Orchestrates the instantiation of worker threads and binds signals to UI slots.
 
 ### UI Components
-- **`sidebar.py`**: The navigation menu on the left.
+- **`sidebar.py`**: The navigation menu on the left (now using fluid sizing).
 - **`downloads_page.py`**: The queue and history of actively downloading and completed files.
 - **`settings_page.py`**: The configuration interface (theme selection, download path).
-- **`ui_components.py`**: Reusable generic widgets, such as `VideoInfoPanel` (shows video thumbnail, title, stats), `QualitySelector`, and `ProgressWidget`.
+- **`ui_components.py`**: Reusable generic widgets, such as `VideoInfoPanel`, `QualitySelector`, and `ProgressWidget`.
 - **`theme.py`**: Manages the dynamic generation of Qt Style Sheets (QSS) for light and dark modes.
+
+### Assets & Icons
+The application has transitioned from system-emoji icons to a professional **SVG Vector Icon System**. Icons are stored in `assets/icons/` and loaded dynamically using a helper method in `ui_components.py` and `settings_page.py`, ensuring a crisp look at any DPI.
 
 ---
 
@@ -35,9 +38,11 @@ This module encapsulates all interactions with the external `yt-dlp` library and
 
 ### `VideoDownloader` Class
 - **FFmpeg Discovery**: Locates the `FFmpeg` executable needed for merging video and audio streams.
-- **Cookie Extraction**: Scans the user's local browsers (Chrome, Firefox, Edge, etc.) to extract cookies. This is critical for bypassing age restrictions and rate limits on YouTube.
+- **Multithreaded Support (Aria2c)**: Automatically detects `aria2c.exe` and configures `yt-dlp` to use it for parallel segment downloading (up to 16 threads), significantly increasing speed.
+- **YouTube Bypass Engine**: Implements `extractor-args` for the YouTube extractor, mimicking mobile clients (`android`, `web`) to bypass "content not available" restrictions.
+- **Cookie Extraction**: Scans the user's local browsers (Chrome, Firefox, Edge, etc.) to extract cookies. This is critical for bypassing age restrictions and rate limits.
 - **`get_video_info()`**: Fetches metadata (title, thumbnails, available quality formats) without actually downloading the video.
-- **`download_video()`**: The primary function that configures `yt-dlp` options (quality, output path, post-processors, format selection) and starts the download.
+- **`download_video()`**: The primary function that configures `yt-dlp` options and starts the download.
 
 ### Custom Logging & Progress Parsing
 `YtDlpLogger` intercepts the console output of `yt-dlp`. It uses regex matching on the output stream to extract the download percentage, file size, speed, and ETA. These values are sent via a callback to the UI layer for real-time progress bars.

@@ -3,12 +3,13 @@ Downloads management page for Downloader PRO.
 Shows summary stats, active downloads with progress, and completed items.
 """
 
+from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QProgressBar, QSizePolicy, QFrame
 )
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtGui import QFont, QIcon
 
 
 class StatCard(QWidget):
@@ -70,23 +71,27 @@ class DownloadItemCard(QWidget):
     pause_clicked = Signal(str)
     cancel_clicked = Signal(str)
 
-    def __init__(self, download_id, title, source_info, parent=None):
+    def __init__(self, video_id: str, title: str, quality: str, parent=None):
         super().__init__(parent)
-        self.download_id = download_id
-        self.setObjectName("glass_panel")
-        self.setMinimumHeight(90)
-
+        self.video_id = video_id
+        self.setObjectName("download_card")
+        self.setMinimumHeight(100)
+        
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(16)
-
-        # Icon / thumbnail placeholder
-        thumb = QLabel("📹")
-        thumb.setFont(QFont("Segoe UI", 24))
-        thumb.setFixedSize(64, 54)
-        thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        thumb.setStyleSheet("background-color: #060e20; border-radius: 8px;")
-        layout.addWidget(thumb)
+        
+        # Thumbnail placeholder
+        self.thumb = QLabel()
+        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
+        if (icon_dir / "video.svg").exists():
+            self.thumb.setPixmap(QIcon(str(icon_dir / "video.svg")).pixmap(32, 32))
+        else:
+            self.thumb.setText("V")
+        self.thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.thumb.setFixedSize(120, 68)
+        self.thumb.setStyleSheet("background-color: #1a1e2d; border-radius: 6px;")
+        layout.addWidget(self.thumb)
 
         # Info column
         info_col = QVBoxLayout()
@@ -108,7 +113,7 @@ class DownloadItemCard(QWidget):
 
         # Source info
         source_row = QHBoxLayout()
-        source_label = QLabel(source_info)
+        source_label = QLabel(quality)
         source_label.setObjectName("section_subtitle")
         source_label.setFont(QFont("Segoe UI", 10))
         source_row.addWidget(source_label)
@@ -150,23 +155,34 @@ class DownloadItemCard(QWidget):
         layout.addLayout(info_col, stretch=1)
 
         # Action buttons
-        btn_col = QVBoxLayout()
-        btn_col.setSpacing(4)
+        btn_layout = QVBoxLayout()
+        
+        self.pause_btn = QPushButton()
+        if (icon_dir / "pause.svg").exists():
+            self.pause_btn.setIcon(QIcon(str(icon_dir / "pause.svg")))
+            self.pause_btn.setIconSize(QSize(14, 14))
+        else:
+            self.pause_btn.setText("||")
+        self.pause_btn.setFixedSize(32, 32)
+        self.pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.pause_btn.setToolTip("Pause/Resume")
+        self.pause_btn.clicked.connect(lambda: self.pause_clicked.emit(self.video_id))
+        btn_layout.addWidget(self.pause_btn)
+        
+        self.cancel_btn = QPushButton()
+        if (icon_dir / "x.svg").exists():
+            self.cancel_btn.setIcon(QIcon(str(icon_dir / "x.svg")))
+            self.cancel_btn.setIconSize(QSize(14, 14))
+        else:
+            self.cancel_btn.setText("X")
+        self.cancel_btn.setFixedSize(32, 32)
+        self.cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.cancel_btn.setToolTip("Cancel")
+        self.cancel_btn.setStyleSheet("color: #ffb4ab; border-color: rgba(255, 180, 171, 0.2);")
+        self.cancel_btn.clicked.connect(lambda: self.cancel_clicked.emit(self.video_id))
+        btn_layout.addWidget(self.cancel_btn)
 
-        pause_btn = QPushButton("⏸")
-        pause_btn.setFixedSize(38, 38)
-        pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        pause_btn.clicked.connect(lambda: self.pause_clicked.emit(self.download_id))
-        btn_col.addWidget(pause_btn)
-
-        cancel_btn = QPushButton("✕")
-        cancel_btn.setFixedSize(38, 38)
-        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        cancel_btn.setStyleSheet("color: #ffb4ab;")
-        cancel_btn.clicked.connect(lambda: self.cancel_clicked.emit(self.download_id))
-        btn_col.addWidget(cancel_btn)
-
-        layout.addLayout(btn_col)
+        layout.addLayout(btn_layout)
 
     def update_progress(self, progress, status):
         self.progress_bar.setValue(int(progress))
@@ -180,7 +196,7 @@ class CompletedItemCard(QWidget):
     def __init__(self, title, file_size, completion_time, parent=None):
         super().__init__(parent)
         self.setObjectName("surface_card_low")
-        self.setFixedHeight(64)
+        self.setMinimumHeight(64)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 8, 16, 8)
@@ -242,19 +258,19 @@ class DownloadsPage(QWidget):
         self.main_layout.setSpacing(20)
 
         # ── Summary Stats ──
-        stats_row = QHBoxLayout()
-        stats_row.setSpacing(16)
+        stats_layout = QHBoxLayout()
+        stats_layout.setSpacing(16)
 
-        self.active_stat = StatCard("🔄", "Active Downloads", "0", "/ 0 total")
-        stats_row.addWidget(self.active_stat)
+        self.active_stat = StatCard("refresh", "Active Downloads", "0")
+        stats_layout.addWidget(self.active_stat)
 
-        self.speed_stat = StatCard("⚡", "Avg. Speed", "—", "MB/s")
-        stats_row.addWidget(self.speed_stat)
+        self.speed_stat = StatCard("zap", "Current Speed", "0 B/s")
+        stats_layout.addWidget(self.speed_stat)
 
-        self.storage_stat = StatCard("💾", "Storage Remaining", "—", "GB")
-        stats_row.addWidget(self.storage_stat)
+        self.storage_stat = StatCard("hard-drive", "Free Space", "Calculating...")
+        stats_layout.addWidget(self.storage_stat)
 
-        self.main_layout.addLayout(stats_row)
+        self.main_layout.addLayout(stats_layout)
 
         # ── Filter tabs ──
         filter_row = QHBoxLayout()
