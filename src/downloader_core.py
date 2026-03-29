@@ -90,11 +90,24 @@ class YtDlpLogger:
 
 
 class VideoDownloader:
-    def __init__(self):
+    def __init__(self, po_token="", cookies_path="", use_oauth2=False):
         self.current_download = None
+        self.po_token = po_token
+        self.cookies_path = cookies_path
+        self.use_oauth2 = use_oauth2
         self.setup_ffmpeg_path()
         self.setup_aria2_path()
-        self._cookie_browser = self._detect_cookie_browser()
+        self._cookie_browser = self._detect_cookie_browser() if not cookies_path else None
+
+    def set_advanced_settings(self, po_token, cookies_path, use_oauth2=False):
+        """Update settings dynamically."""
+        self.po_token = po_token
+        self.cookies_path = cookies_path
+        self.use_oauth2 = use_oauth2
+        if cookies_path:
+            self._cookie_browser = None
+        elif not self._cookie_browser:
+            self._cookie_browser = self._detect_cookie_browser()
 
     def setup_ffmpeg_path(self):
         """Setup FFmpeg path for both development and packaged app"""
@@ -165,21 +178,46 @@ class VideoDownloader:
 
     def _get_base_opts(self, progress_callback=None):
         """Common yt-dlp options shared across info fetching and downloading."""
+        # Use ios, android, web clients to bypass 360p limits
+        clients = ['ios', 'android', 'web']
+        
+        # Build extractor args with PO Token if available
+        youtube_args = {'player_client': clients}
+        if self.po_token:
+            # Apply token to all supported clients as a safe bet
+            youtube_args['po_token'] = [
+                f"ios+{self.po_token}",
+                f"android+{self.po_token}",
+                f"web+{self.po_token}"
+            ]
+
         opts = {
             'no_warnings': True,
-            # Use custom logger to capture all yt-dlp output for progress
             'logger': YtDlpLogger(progress_callback),
-            # Bypass client-side blocking (The following content is not available on this app)
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+            'extractor_args': {'youtube': youtube_args},
         }
-        if self._cookie_browser:
+
+        # OAuth2 Login Support
+        if self.use_oauth2:
+            opts['username'] = 'oauth2'
+            log.info("Using YouTube OAuth2 authentication")
+
+        # Cookie handling: Prefer manual file, otherwise browser
+        if self.cookies_path and os.path.exists(self.cookies_path):
+            opts['cookiefile'] = self.cookies_path
+            log.info("Using custom cookies from: %s", self.cookies_path)
+        elif self._cookie_browser:
             opts['cookiesfrombrowser'] = (self._cookie_browser,)
+            
         return opts
 
     def get_video_info(self, url):
         """Get video information without downloading"""
         log.info("Fetching video info for: %s", url)
         opts = self._get_base_opts()
+        
+        # If we're using OAuth2, we specify username=oauth2
+        # On the first call, it might prompt, but we expect it to be cached
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -188,6 +226,56 @@ class VideoDownloader:
         except Exception as e:
             log.error("Failed to fetch video info: %s", e, exc_info=True)
             return None
+
+    def start_oauth_login(self, instructions_callback):
+        """
+        Start the yt-dlp OAuth2 login flow.
+        Captures the 'Device Flow' instructions and passes them to the callback.
+        """
+        import subprocess
+        log.info("Starting YouTube OAuth2 Login Flow")
+        
+        # We'll use a subprocess to run yt-dlp directly because we need to interact 
+        # with its stdout specifically for the login code.
+        cmd = [
+            sys.executable, "-m", "yt_dlp",
+            "--username", "oauth2",
+            "--no-download-archive",
+            "--flat-playlist",
+            # We use a dummy URL to trigger the login check
+            "https://www.youtube.com/watch?v=jvXVmvW8ZQw"
+        ]
+        
+        try:
+            # We want to capture the output to find the "To sign in..." message
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            
+            for line in process.stdout:
+                log.debug("OAuth check: %s", line.strip())
+                if "To sign in, use a web browser to open the page" in line:
+                    # Capture "https://www.google.com/device" and "XXXX-XXXX"
+                    # Format: To sign in, use a web browser to open the page https://www.google.com/device and enter the code ABCD-1234
+                    match = re.search(r'page\s+(\S+)\s+and\s+enter\s+the\s+code\s+(\S+)', line)
+                    if match:
+                        url = match.group(1)
+                        code = match.group(2)
+                        instructions_callback(url, code)
+                
+                if "logged in" in line.lower() or "completed" in line.lower():
+                    # Check for completion
+                    pass
+
+            process.wait()
+            return True
+        except Exception as e:
+            log.error("OAuth login failed: %s", e)
+            return False
 
     def download_video(self, url, quality, output_path, audio_only=False, progress_callback=None):
         """Download video with advanced quality selection support"""

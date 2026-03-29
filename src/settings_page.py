@@ -18,6 +18,8 @@ class SettingsPage(QWidget):
 
     theme_changed = Signal(str)
     settings_changed = Signal(dict)
+    oauth_login_requested = Signal()
+    oauth_logout_requested = Signal()
 
     def __init__(self, settings_manager, parent=None):
         super().__init__(parent)
@@ -351,6 +353,92 @@ class SettingsPage(QWidget):
         engine_layout.addLayout(metrics)
 
         right.addWidget(engine_card)
+
+        # ── Advanced & YouTube ──
+        advanced_card = self._create_card()
+        advanced_card.setStyleSheet(advanced_card.styleSheet() + "border-left: 4px solid #4cd7f6;")
+        advanced_layout = QVBoxLayout(advanced_card)
+        advanced_layout.setContentsMargins(24, 20, 24, 20)
+        advanced_layout.setSpacing(16)
+
+        adv_title_row = QHBoxLayout()
+        adv_icon = self._create_icon_label("🛠️", "settings")
+        adv_title_row.addWidget(adv_icon)
+        adv_title = QLabel("Advanced & YouTube")
+        adv_title.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        adv_title_row.addWidget(adv_title)
+        adv_title_row.addStretch()
+        advanced_layout.addLayout(adv_title_row)
+
+        # YouTube PO Token
+        po_token_label = QLabel("YOUTUBE PO TOKEN")
+        po_token_label.setObjectName("stat_label")
+        po_token_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        advanced_layout.addWidget(po_token_label)
+
+        self.po_token_input = QLineEdit()
+        self.po_token_input.setPlaceholderText("Enter android.gvs+TOKEN or similar...")
+        self.po_token_input.setMinimumHeight(36)
+        self.po_token_input.setFont(QFont("Consolas", 10))
+        advanced_layout.addWidget(self.po_token_input)
+
+        # Cookies file
+        cookies_label = QLabel("CUSTOM COOKIES FILE (.TXT)")
+        cookies_label.setObjectName("stat_label")
+        cookies_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        advanced_layout.addWidget(cookies_label)
+
+        cookies_row = QHBoxLayout()
+        cookies_row.setSpacing(10)
+        self.cookies_input = QLineEdit()
+        self.cookies_input.setPlaceholderText("Path to exported cookies.txt")
+        self.cookies_input.setMinimumHeight(36)
+        self.cookies_input.setFont(QFont("Consolas", 10))
+        self.cookies_input.setReadOnly(True)
+        cookies_row.addWidget(self.cookies_input)
+
+        cookies_browse_btn = QPushButton("Browse")
+        cookies_browse_btn.setMinimumHeight(36)
+        cookies_browse_btn.setFixedWidth(80)
+        cookies_browse_btn.clicked.connect(self._browse_cookies)
+        cookies_row.addWidget(cookies_browse_btn)
+        advanced_layout.addLayout(cookies_row)
+
+        # OAuth2 Login
+        login_label = QLabel("YOUTUBE ACCOUNT")
+        login_label.setObjectName("stat_label")
+        login_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        advanced_layout.addWidget(login_label)
+
+        self.login_status = QLabel()
+        self._update_login_status()
+        advanced_layout.addWidget(self.login_status)
+
+        login_row = QHBoxLayout()
+        self.login_btn = QPushButton(" Login with YouTube")
+        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
+        if (icon_dir / "user.svg").exists():
+            self.login_btn.setIcon(QIcon(str(icon_dir / "user.svg")))
+        self.login_btn.setMinimumHeight(38)
+        self.login_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.login_btn.clicked.connect(self.oauth_login_requested.emit)
+        login_row.addWidget(self.login_btn)
+
+        self.logout_btn = QPushButton(" Logout")
+        self.logout_btn.setMinimumHeight(38)
+        self.logout_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.logout_btn.clicked.connect(self._handle_logout)
+        login_row.addWidget(self.logout_btn)
+        
+        advanced_layout.addLayout(login_row)
+
+        adv_hint = QLabel("Use these to bypass 360p restrictions and rate limits.")
+        adv_hint.setObjectName("section_subtitle")
+        adv_hint.setFont(QFont("Segoe UI", 9))
+        adv_hint.setStyleSheet("font-style: italic;")
+        advanced_layout.addWidget(adv_hint)
+
+        right.addWidget(advanced_card)
         right.addStretch()
 
         columns.addLayout(right, stretch=1)
@@ -409,6 +497,31 @@ class SettingsPage(QWidget):
         if folder:
             self.path_input.setText(folder)
 
+    def _update_login_status(self):
+        is_logged_in = self.settings.get_use_oauth2()
+        if is_logged_in:
+            self.login_status.setText("✅ Authenticated via OAuth2")
+            self.login_status.setStyleSheet("color: #4cd7f6; font-weight: bold;")
+            if hasattr(self, 'login_btn'): self.login_btn.hide()
+            if hasattr(self, 'logout_btn'): self.logout_btn.show()
+        else:
+            self.login_status.setText("❌ Not logged in")
+            self.login_status.setStyleSheet("color: #ff4d4d;")
+            if hasattr(self, 'login_btn'): self.login_btn.show()
+            if hasattr(self, 'logout_btn'): self.logout_btn.hide()
+
+    def _handle_logout(self):
+        self.settings.set_use_oauth2(False)
+        self._update_login_status()
+        self.oauth_logout_requested.emit()
+
+    def _browse_cookies(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Netscape Cookies File", "", "Text Files (*.txt);;All Files (*)"
+        )
+        if file_path:
+            self.cookies_input.setText(file_path)
+
     def _on_theme_selected(self, theme_key):
         for key, btn in self.theme_buttons.items():
             is_active = (key == theme_key)
@@ -435,6 +548,10 @@ class SettingsPage(QWidget):
         intensity_map = {"low": 0, "medium": 1, "high": 2, "extreme": 3}
         self.thread_combo.setCurrentIndex(intensity_map.get(intensity, 2))
 
+        self.po_token_input.setText(self.settings.get_po_token())
+        self.cookies_input.setText(self.settings.get_cookies_path())
+        self._update_login_status()
+
     def _save_settings(self):
         self.settings.set_download_path(self.path_input.text())
 
@@ -446,5 +563,8 @@ class SettingsPage(QWidget):
             "max_concurrent": self.concurrent_slider.value(),
             "speed_limit": int(self.speed_limit_input.text() or 0),
             "thread_intensity": intensity_map.get(self.thread_combo.currentIndex(), "high"),
+            "po_token": self.po_token_input.text().strip(),
+            "cookies_path": self.cookies_input.text().strip(),
         })
         self.settings.save_settings()
+        self.settings_changed.emit(self.settings.settings)

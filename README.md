@@ -5,29 +5,30 @@ A modern, professional YouTube video and audio downloader built with Python and 
 ## ✨ Features
 
 - **Modern PySide6 GUI**: Clean, responsive, glassmorphic design with fluid layouts.
-- **SVG Icon System**: All-new professional vector icons (replacing emojis) for a truly crisp, modern look.
-- **Multithreaded Turbo Downloads**: Integration with `aria2c` for 10x faster concurrent downloads (up to 16 threads).
-- **YouTube Bypass Engine**: Advanced `extractor-args` configuration to bypass "content not available on this app" blocks.
+- **SVG Icon System**: Professional vector icons for a crisp, modern look.
+- **YouTube Account Login (OAuth2)**: Official Google Device Flow integration to unlock 4k/8K quality and bypass 360p caps securely.
+- **Multithreaded Turbo Downloads**: Integration with `aria2` for 10x faster concurrent downloads (up to 16 threads per task).
+- **Advanced Bypass Engine**: Manual support for **PO Tokens** and Netscape-formatted **Custom Cookies** (`cookies.txt`) to bypass DPAPI encryption and rate limits.
 - **Dark/Light Theme Toggle**: Proper contrast support with dynamic stylesheet generation.
 - **Detailed Quality Selection**: Shows resolution, codec (H.264, VP9, AV1), bitrate, and HDR/SDR info.
 - **Audio-only Downloads**: Extract high-quality MP3s easily.
 - **Real-time Progress Tracking**: Shows live download speed, ETA, and file size.
-- **Browser Cookie Integration**: Bypasses YouTube's rate-limiting automatically by reading browser cookies.
 - **Clipboard Integration**: Quick-paste button for URLs.
-- **Persistent Settings**: Remembers your preferred download location and theme.
+- **Persistent Settings**: Remembers your preferred download location, tokens, auth state, and theme.
 ### [DownloaderPRO](https://github.com/double-uRB) &nbsp; ![Python](https://img.shields.io/badge/-Python-3776AB?style=flat-square&logo=python&logoColor=white) ![PySide6](https://img.shields.io/badge/-PySide6-41CD52?style=flat-square&logo=qt&logoColor=white) ![FFmpeg](https://img.shields.io/badge/-FFmpeg-007808?style=flat-square) ![aria2](https://img.shields.io/badge/-aria2-333333?style=flat-square) ![yt--dlp](https://img.shields.io/badge/-yt--dlp-FF0000?style=flat-square&logo=youtube&logoColor=white)
 > A modern desktop video downloader with a clean GUI and rich feature set
 
 | Feature | Details |
 |---|---|
 | 🎨 Themes | Light & dark mode support |
-| 📹 Quality | 4K, 1080p, 720p options |
+| 📹 Quality | 4K, 1080p, 720p options (unlocked via OAuth2) |
+| 🔑 Auth | YouTube Account Login (OAuth2 Device Flow) and PO Token support |
 | 🎵 Audio | MP3 extraction via FFmpeg media pipeline |
-| ⚡ Engine | aria2c multi-connection download engine |
-| 🔗 Extraction | yt-dlp for stream URL parsing & format selection |
-| ⚡ Engine | aria2c multi-threaded download engine — parallel connections for maximum speed |
-| 🛡️ Anti-block | Custom `extractor-args` in `downloader_core.py` mimicking Android & Web player clients to bypass YouTube restrictions |
-| 💾 Storage | Persistent user preferences |
+| ⚡ Engine | `aria2` multi-threaded download engine — up to 16 parallel connections for maximum speed |
+| 🔗 Extraction | `yt-dlp` for stream URL parsing & format selection |
+| 🛡️ Anti-block | Custom `extractor-args` mimicking `ios` & `android` clients to bypass restrictions |
+| 💿 Cookies | Support for Netscape-formatted `cookies.txt` fallback for encrypted browser environments |
+| 💾 Storage | Persistent user preferences and secure session data |
 
 ## 🖼️ Screenshots
 
@@ -48,7 +49,7 @@ A modern, professional YouTube video and audio downloader built with Python and 
 ### Prerequisites
 - Python 3.8+
 - [FFmpeg](https://ffmpeg.org/download.html) (Required for merging video/audio).
-- [aria2c](https://aria2.github.io/) (Recommended for multithreaded performance).
+- [aria2](https://aria2.github.io/) (Highly recommended for high-speed multithreaded downloads).
 - Place `ffmpeg.exe` and `aria2c.exe` in the `tools/` folder or ensure they are in your system PATH.
 
 ### Installation

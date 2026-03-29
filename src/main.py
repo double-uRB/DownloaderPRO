@@ -43,7 +43,11 @@ class YouTubeDownloaderApp(QMainWindow):
 
         # Initialize managers
         self.settings = SettingsManager()
-        self.downloader = VideoDownloader()
+        self.downloader = VideoDownloader(
+            po_token=self.settings.get_po_token(),
+            cookies_path=self.settings.get_cookies_path(),
+            use_oauth2=self.settings.get_use_oauth2()
+        )
         self.current_video_info = None
         self.quality_selector = None
         self.download_counter = 0
@@ -103,6 +107,9 @@ class YouTubeDownloaderApp(QMainWindow):
         # Page 2: Settings
         self.settings_page = SettingsPage(self.settings)
         self.settings_page.theme_changed.connect(self._on_theme_changed)
+        self.settings_page.settings_changed.connect(self._on_settings_saved)
+        self.settings_page.oauth_login_requested.connect(self._handle_oauth_login)
+        self.settings_page.oauth_logout_requested.connect(self._handle_oauth_logout)
         self.page_stack.addWidget(self.settings_page)
 
         main_layout.addWidget(self.page_stack)
@@ -404,6 +411,78 @@ class YouTubeDownloaderApp(QMainWindow):
     def _apply_theme(self):
         self.setStyleSheet(generate_stylesheet(self.theme_mode))
 
+    def _on_settings_saved(self, settings):
+        """Handle settings saved event."""
+        po_token = settings.get("po_token", "")
+        cookies_path = settings.get("cookies_path", "")
+        use_oauth2 = settings.get("use_oauth2", False)
+        self.downloader.set_advanced_settings(po_token, cookies_path, use_oauth2)
+        self.statusBar().showMessage("Engine configuration updated")
+
+    def _handle_oauth_login(self):
+        """Start the OAuth2 login flow with a dialog."""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit
+        from PySide6.QtGui import QFont, QDesktopServices
+        from PySide6.QtCore import QUrl
+        
+        self.login_dialog = QDialog(self)
+        self.login_dialog.setWindowTitle("YouTube Login")
+        self.login_dialog.setMinimumWidth(400)
+        
+        layout = QVBoxLayout(self.login_dialog)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        title = QLabel("Authentication Required")
+        title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        layout.addWidget(title)
+        
+        self.login_instr = QLabel("Initializing login flow...")
+        self.login_instr.setWordWrap(True)
+        layout.addWidget(self.login_instr)
+        
+        self.code_input = QLineEdit()
+        self.code_input.setReadOnly(True)
+        self.code_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.code_input.setFont(QFont("Consolas", 18, QFont.Weight.Bold))
+        self.code_input.setStyleSheet("padding: 10px; background: #060e20; color: #4cd7f6; border-radius: 8px;")
+        self.code_input.hide()
+        layout.addWidget(self.code_input)
+        
+        self.link_btn = QPushButton("Open Login Page")
+        self.link_btn.setObjectName("primary_button")
+        self.link_btn.hide()
+        layout.addWidget(self.link_btn)
+        
+        # Start the worker thread
+        self.oauth_thread = OAuthLoginThread(self.downloader)
+        
+        def on_instructions(url, code):
+            self.login_instr.setText("1. Click the button below to open the Google login page.\n2. Enter the following code:")
+            self.code_input.setText(code)
+            self.code_input.show()
+            self.link_btn.show()
+            self.link_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(url)))
+            
+        self.oauth_thread.instructions_received.connect(on_instructions)
+        self.oauth_thread.finished.connect(self._on_oauth_finished)
+        self.oauth_thread.start()
+        
+        self.login_dialog.exec()
+
+    def _on_oauth_finished(self):
+        if hasattr(self, 'login_dialog'):
+            self.login_dialog.accept()
+        self.settings.set_use_oauth2(True)
+        self.settings_page.load_settings() # Refresh UI status
+        self.downloader.use_oauth2 = True
+        log.info("OAuth login process completed")
+        QMessageBox.information(self, "Success", "YouTube account connected successfully!")
+
+    def _handle_oauth_logout(self):
+        self.downloader.use_oauth2 = False
+        self.statusBar().showMessage("Logged out from YouTube")
+
     # ─── URL / Fetch ────────────────────────────────────────────────────────
 
     def _paste_url(self):
@@ -615,6 +694,23 @@ class DownloadThread(QThread):
                 self.download_failed.emit(error_msg or "Unknown error")
         except Exception as e:
             self.download_failed.emit(str(e))
+
+
+class OAuthLoginThread(QThread):
+    instructions_received = Signal(str, str)
+    login_completed = Signal()
+
+    def __init__(self, downloader):
+        super().__init__()
+        self.downloader = downloader
+
+    def run(self):
+        def on_instr(url, code):
+            self.instructions_received.emit(url, code)
+
+        success = self.downloader.start_oauth_login(on_instr)
+        if success:
+            self.login_completed.emit()
 
 
 def main():

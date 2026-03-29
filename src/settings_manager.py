@@ -22,6 +22,9 @@ class SettingsManager:
             "max_concurrent": 5,
             "speed_limit": 0,
             "thread_intensity": "high",
+            "po_token": "",
+            "cookies_path": "",
+            "use_oauth2": False,
         }
         self.settings = self.load_settings()
 
@@ -69,4 +72,25 @@ class SettingsManager:
 
     def set_last_quality(self, quality):
         self.settings["last_quality"] = quality
+        self.save_settings()
+
+    def get_po_token(self):
+        return self.settings.get("po_token", "")
+
+    def set_po_token(self, token):
+        self.settings["po_token"] = token
+        self.save_settings()
+
+    def get_cookies_path(self):
+        return self.settings.get("cookies_path", "")
+
+    def set_cookies_path(self, path):
+        self.settings["cookies_path"] = path
+        self.save_settings()
+
+    def get_use_oauth2(self):
+        return self.settings.get("use_oauth2", False)
+
+    def set_use_oauth2(self, enabled):
+        self.settings["use_oauth2"] = enabled
         self.save_settings()

@@ -24,7 +24,7 @@ The UI is built with a modern, glassmorphic design and consists of modular compo
 ### UI Components
 - **`sidebar.py`**: The navigation menu on the left (now using fluid sizing).
 - **`downloads_page.py`**: The queue and history of actively downloading and completed files.
-- **`settings_page.py`**: The configuration interface (theme selection, download path).
+- **`settings_page.py`**: The configuration interface (theme selection, download path, and advanced YouTube authentication).
 - **`ui_components.py`**: Reusable generic widgets, such as `VideoInfoPanel`, `QualitySelector`, and `ProgressWidget`.
 - **`theme.py`**: Manages the dynamic generation of Qt Style Sheets (QSS) for light and dark modes.
 
@@ -38,9 +38,11 @@ This module encapsulates all interactions with the external `yt-dlp` library and
 
 ### `VideoDownloader` Class
 - **FFmpeg Discovery**: Locates the `FFmpeg` executable needed for merging video and audio streams.
-- **Multithreaded Support (Aria2c)**: Automatically detects `aria2c.exe` and configures `yt-dlp` to use it for parallel segment downloading (up to 16 threads), significantly increasing speed.
-- **YouTube Bypass Engine**: Implements `extractor-args` for the YouTube extractor, mimicking mobile clients (`android`, `web`) to bypass "content not available" restrictions.
-- **Cookie Extraction**: Scans the user's local browsers (Chrome, Firefox, Edge, etc.) to extract cookies. This is critical for bypassing age restrictions and rate limits.
+- **Turbo Multi-threading (`aria2`)**: Automatically detects the `aria2` executable and configures `yt-dlp` as an external downloader. It uses up to **16 parallel connections** (`-n 16 -x 16 -k 1M`) to maximize bandwidth utilization and bypass per-connection speed limits.
+- **YouTube Bypass Engine**: Implements a prioritized `player_client` list (`ios`, `android`, `web`) and applies **PO Tokens** (Proof of Origin) to extractor arguments. This prevents 360p caps and "content unavailable" blocks.
+- **Authentication (OAuth2 & Cookies)**: 
+    - **OAuth2 Device Flow**: Implements the `start_oauth_login` method which runs a `yt-dlp` subprocess to trigger Google's device activation flow, capturing the link and code for the user.
+    - **Custom Cookies**: Provides a fallback for manual Netscape-formatted `cookies.txt` files, bypassing Windows DPAPI (App-Bound Encryption) issues in modern browsers.
 - **`get_video_info()`**: Fetches metadata (title, thumbnails, available quality formats) without actually downloading the video.
 - **`download_video()`**: The primary function that configures `yt-dlp` options and starts the download.
 
@@ -60,6 +62,11 @@ To prevent the PySide6 UI from freezing during network requests, all heavy lifti
   - Handles the downloading process via `VideoDownloader.download_video`.
   - Emits `progress_updated(int, str)` as `yt-dlp` downloads data.
   - Emits `download_completed()` or `download_failed(str)` upon conclusion.
+
+- **`OAuthLoginThread`**:
+  - Manages the asynchronous YouTube login process.
+  - Intercepts `yt-dlp` output to find activation instructions.
+  - Signals the UI to show the login dialog and activation code.
 
 ---
 
