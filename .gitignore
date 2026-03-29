@@ -59,6 +59,7 @@ venv.bak/
 *.swp
 *.swo
 *~
+.agents/
 
 # OS generated files
 .DS_Store
@@ -82,3 +83,6 @@ tools/ffmpeg.exe
 # Portable Builds
 DownloaderPRO_Portable/
 *.zip
+*.spec
+*.tmp
+*.temp
