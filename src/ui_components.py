@@ -12,6 +12,7 @@ from PySide6.QtGui import QFont, QPixmap, QIcon
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from PySide6.QtCore import QUrl
 from pathlib import Path
+from utils import get_resource_path
 
 
 class VideoInfoPanel(QWidget):
@@ -43,9 +44,9 @@ class VideoInfoPanel(QWidget):
         thumb_layout.setContentsMargins(0, 0, 0, 0)
 
         self.thumbnail_label = QLabel()
-        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
-        if (icon_dir / "film.svg").exists():
-            self.thumbnail_label.setPixmap(QIcon(str(icon_dir / "film.svg")).pixmap(64, 64))
+        icon_path = get_resource_path("assets/icons/film.svg")
+        if Path(icon_path).exists():
+            self.thumbnail_label.setPixmap(QIcon(icon_path).pixmap(64, 64))
         else:
             self.thumbnail_label.setText("📹")
             self.thumbnail_label.setFont(QFont("Segoe UI", 60))
@@ -179,9 +180,7 @@ class VideoInfoPanel(QWidget):
 
         self.title_label.setText(title)
         self.channel_label.setText(f"  {uploader}")
-        if (Path(__file__).parent.parent / "assets" / "icons" / "user.svg").exists():
-            # Quick hack to inject icon if we wanted, but text is fine for now; wait, let's use a real icon layout later if needed
-            pass
+        # (Could add user icon here using get_resource_path)
 
         # Duration badge
         if duration:
@@ -301,11 +300,9 @@ class QualityCard(QPushButton):
 
         # Checkmark (shown when selected)
         self.check_label = QLabel()
-        from pathlib import Path
-        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
-        if (icon_dir / "check.svg").exists():
-            from PySide6.QtGui import QIcon
-            self.check_label.setPixmap(QIcon(str(icon_dir / "check.svg")).pixmap(20, 20))
+        icon_path = get_resource_path("assets/icons/check.svg")
+        if Path(icon_path).exists():
+            self.check_label.setPixmap(QIcon(icon_path).pixmap(20, 20))
         else:
             self.check_label.setText("✅")
             self.check_label.setFont(QFont("Segoe UI", 14))
@@ -360,11 +357,9 @@ class QualitySelector(QWidget):
         # Title
         title_row = QHBoxLayout()
         icon = QLabel()
-        from pathlib import Path
-        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
-        if (icon_dir / "film.svg").exists():
-            from PySide6.QtGui import QIcon
-            icon.setPixmap(QIcon(str(icon_dir / "film.svg")).pixmap(24, 24))
+        icon_path = get_resource_path("assets/icons/film.svg")
+        if Path(icon_path).exists():
+            icon.setPixmap(QIcon(icon_path).pixmap(24, 24))
         else:
             icon.setText("🎬")
         title_row.addWidget(icon)
@@ -549,21 +544,21 @@ class ProgressWidget(QWidget):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
-        from pathlib import Path
-        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
         from PySide6.QtGui import QIcon
         from PySide6.QtCore import QSize
 
         self.pause_btn = QPushButton("  Pause")
-        if (icon_dir / "pause.svg").exists():
-            self.pause_btn.setIcon(QIcon(str(icon_dir / "pause.svg")))
+        pause_icon = get_resource_path("assets/icons/pause.svg")
+        if Path(pause_icon).exists():
+            self.pause_btn.setIcon(QIcon(pause_icon))
             self.pause_btn.setIconSize(QSize(16, 16))
         self.pause_btn.setMinimumHeight(36)
         btn_row.addWidget(self.pause_btn)
 
         self.cancel_btn = QPushButton("  Cancel")
-        if (icon_dir / "x.svg").exists():
-            self.cancel_btn.setIcon(QIcon(str(icon_dir / "x.svg")))
+        x_icon = get_resource_path("assets/icons/x.svg")
+        if Path(x_icon).exists():
+            self.cancel_btn.setIcon(QIcon(x_icon))
             self.cancel_btn.setIconSize(QSize(16, 16))
         self.cancel_btn.setMinimumHeight(36)
         self.cancel_btn.setStyleSheet("color: #ffb4ab;")

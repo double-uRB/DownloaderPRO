@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QPixmap
 from pathlib import Path
+from utils import get_resource_path
 
 
 class NavButton(QPushButton):
@@ -24,11 +25,11 @@ class NavButton(QPushButton):
         self.setMinimumHeight(48)
         
         # Load SVG icon
-        icon_path = Path(__file__).parent.parent / "assets" / "icons" / f"{icon_name}.svg"
+        icon_path = get_resource_path(f"assets/icons/{icon_name}.svg")
         from PySide6.QtGui import QIcon
         from PySide6.QtCore import QSize
-        if icon_path.exists():
-            self.setIcon(QIcon(str(icon_path)))
+        if Path(icon_path).exists():
+            self.setIcon(QIcon(icon_path))
             self.setIconSize(QSize(20, 20))
             
         self._update_text()
@@ -79,15 +80,15 @@ class Sidebar(QWidget):
 
         app_icon = QLabel()
         app_icon.setFixedSize(36, 36)
-        logo_path = Path(__file__).parent.parent / "assets" / "logo.png"
-        if logo_path.exists():
-            pixmap = QPixmap(str(logo_path))
+        logo_path = get_resource_path("assets/logo.png")
+        if Path(logo_path).exists():
+            pixmap = QPixmap(logo_path)
             app_icon.setPixmap(pixmap.scaled(36, 36, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         else:
-            fallback_path = Path(__file__).parent.parent / "assets" / "icons" / "download.svg"
-            if fallback_path.exists():
+            fallback_path = get_resource_path("assets/icons/download.svg")
+            if Path(fallback_path).exists():
                 from PySide6.QtGui import QIcon
-                app_icon.setPixmap(QIcon(str(fallback_path)).pixmap(32, 32))
+                app_icon.setPixmap(QIcon(fallback_path).pixmap(32, 32))
         
         app_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_row.addWidget(app_icon)
@@ -128,9 +129,9 @@ class Sidebar(QWidget):
         new_download_btn = QPushButton("  NEW TASK")
         from PySide6.QtGui import QIcon
         from PySide6.QtCore import QSize
-        btn_icon_path = Path(__file__).parent.parent / "assets" / "icons" / "plus.svg"
-        if btn_icon_path.exists():
-            new_download_btn.setIcon(QIcon(str(btn_icon_path)))
+        plus_icon_path = get_resource_path("assets/icons/plus.svg")
+        if Path(plus_icon_path).exists():
+            new_download_btn.setIcon(QIcon(plus_icon_path))
             new_download_btn.setIconSize(QSize(18, 18))
         new_download_btn.setObjectName("cta_button")
         new_download_btn.setMinimumHeight(48)

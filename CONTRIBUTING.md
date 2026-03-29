@@ -26,7 +26,7 @@ We accept pull requests for bug fixes, features, and documentation improvements.
 5. **Update Documentation:** If you add a new feature or change existing behavior, update the `README.md` or the internal docs in the `docs/` folder accordingly.
 
 ## 🏗️ Local Development Setup
-Refer to the `README.md` and `docs/ARCHITECTURE.md` for setup instructions and a breakdown of the codebase architecture to get started.
+Refer to the **[Installation Guide](docs/INSTALLATION.md#🛠️-option-2-running-from-source-for-developers)** for step-by-step instructions on setting up your Python environment, installing dependencies, and running the app from source.
 
 ## 🤝 Community Behavior
 Please be respectful and patient when interacting with other contributors and maintainers. We are all working together to build a great tool.

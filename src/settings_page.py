@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QFont, QIcon
 from pathlib import Path
+from utils import get_resource_path
 
 
 class SettingsPage(QWidget):
@@ -29,9 +30,9 @@ class SettingsPage(QWidget):
 
     def _create_icon_label(self, emoji: str, icon_name: str, size: int = 24) -> QLabel:
         label = QLabel()
-        p = Path(__file__).parent.parent / "assets" / "icons" / f"{icon_name}.svg"
-        if p.exists():
-            label.setPixmap(QIcon(str(p)).pixmap(size, size))
+        p = get_resource_path(f"assets/icons/{icon_name}.svg")
+        if Path(p).exists():
+            label.setPixmap(QIcon(p).pixmap(size, size))
         else:
             label.setText(emoji)
             label.setFont(QFont("Segoe UI", size - 8))
@@ -282,9 +283,9 @@ class SettingsPage(QWidget):
         icon_map = {"light": "sun", "dark": "moon", "auto": "refresh"}
         for icon, label, key in [("☀️", "Light", "light"), ("🌙", "Dark", "dark"), ("🔄", "System", "auto")]:
             btn = QPushButton(f"  {label}")
-            p = Path(__file__).parent.parent / "assets" / "icons" / f"{icon_map[key]}.svg"
-            if p.exists():
-                btn.setIcon(QIcon(str(p)))
+            p = get_resource_path(f"assets/icons/{icon_map[key]}.svg")
+            if Path(p).exists():
+                btn.setIcon(QIcon(p))
                 btn.setIconSize(QSize(20, 20))
             btn.setMinimumHeight(64)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -416,9 +417,9 @@ class SettingsPage(QWidget):
 
         login_row = QHBoxLayout()
         self.login_btn = QPushButton(" Login with YouTube")
-        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
-        if (icon_dir / "user.svg").exists():
-            self.login_btn.setIcon(QIcon(str(icon_dir / "user.svg")))
+        user_icon_path = get_resource_path("assets/icons/user.svg")
+        if Path(user_icon_path).exists():
+            self.login_btn.setIcon(QIcon(user_icon_path))
         self.login_btn.setMinimumHeight(38)
         self.login_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.login_btn.clicked.connect(self.oauth_login_requested.emit)
@@ -459,10 +460,10 @@ class SettingsPage(QWidget):
         footer_layout.setContentsMargins(28, 10, 28, 10)
 
         unsaved_icon = None
-        p = Path(__file__).parent.parent / "assets" / "icons" / "info.svg"
-        if p.exists():
+        info_icon_path = get_resource_path("assets/icons/info.svg")
+        if Path(info_icon_path).exists():
             unsaved_icon = QLabel()
-            unsaved_icon.setPixmap(QIcon(str(p)).pixmap(18, 18))
+            unsaved_icon.setPixmap(QIcon(info_icon_path).pixmap(18, 18))
             footer_layout.addWidget(unsaved_icon)
             
         unsaved_label = QLabel(" Unsaved changes detected" if unsaved_icon else "ℹ️  Unsaved changes detected")

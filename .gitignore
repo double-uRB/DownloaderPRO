@@ -73,8 +73,8 @@ Thumbs.db
 # User settings
 config/settings.json
 
-# Large binaries (optional - you can choose to include or exclude)
-tools/ffmpeg.exe
+# Large binaries (automatically managed by build_app.py)
+tools/
 
 # Temporary files
 *.tmp

@@ -9,13 +9,7 @@ import pyperclip
 from pathlib import Path
 from app_logger import get_logger
 
-if sys.platform == "win32":
-    import ctypes
-    myappid = "downloaderpro.app.1.0"
-    try:
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
-    except Exception:
-        pass
+# Window icon and taskbar handling will be done in main()
 
 log = get_logger(__name__)
 
@@ -34,6 +28,7 @@ from sidebar import Sidebar
 from theme import generate_stylesheet
 from downloads_page import DownloadsPage
 from settings_page import SettingsPage
+from utils import get_resource_path
 
 
 class YouTubeDownloaderApp(QMainWindow):
@@ -66,9 +61,9 @@ class YouTubeDownloaderApp(QMainWindow):
         self.resize(1100, 750)
         
         # Set window icon (taskbar)
-        icon_path = Path(__file__).parent.parent / "assets" / "logo.ico"
-        if icon_path.exists():
-            self.setWindowIcon(QIcon(str(icon_path)))
+        icon_path = get_resource_path("assets/logo.ico")
+        if Path(icon_path).exists():
+            self.setWindowIcon(QIcon(icon_path))
 
     def _setup_ui(self):
         """Create the sidebar + main content layout."""
@@ -154,8 +149,9 @@ class YouTubeDownloaderApp(QMainWindow):
         icon_dir = Path(__file__).parent.parent / "assets" / "icons"
 
         self.light_icon = QLabel()
-        if (icon_dir / "sun.svg").exists():
-            self.light_icon.setPixmap(QIcon(str(icon_dir / "sun.svg")).pixmap(18, 18))
+        sun_path = get_resource_path("assets/icons/sun.svg")
+        if Path(sun_path).exists():
+            self.light_icon.setPixmap(QIcon(sun_path).pixmap(18, 18))
         else:
             self.light_icon.setText("S")
         self.light_icon.setFixedSize(22, 22)
@@ -165,8 +161,9 @@ class YouTubeDownloaderApp(QMainWindow):
         toggle_layout.addStretch()
 
         self.dark_icon = QLabel()
-        if (icon_dir / "moon.svg").exists():
-            self.dark_icon.setPixmap(QIcon(str(icon_dir / "moon.svg")).pixmap(16, 16))
+        moon_path = get_resource_path("assets/icons/moon.svg")
+        if Path(moon_path).exists():
+            self.dark_icon.setPixmap(QIcon(moon_path).pixmap(16, 16))
         else:
             self.dark_icon.setText("M")
         self.dark_icon.setFixedSize(22, 22)
@@ -180,8 +177,9 @@ class YouTubeDownloaderApp(QMainWindow):
 
         # User avatar placeholder
         avatar = QLabel()
-        if (icon_dir / "user.svg").exists():
-            avatar.setPixmap(QIcon(str(icon_dir / "user.svg")).pixmap(20, 20))
+        user_path = get_resource_path("assets/icons/user.svg")
+        if Path(user_path).exists():
+            avatar.setPixmap(QIcon(user_path).pixmap(20, 20))
         else:
             avatar.setText("U")
         avatar.setFixedSize(34, 34)
@@ -213,9 +211,9 @@ class YouTubeDownloaderApp(QMainWindow):
 
         url_title_row = QHBoxLayout()
         link_icon = QLabel()
-        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
-        if (icon_dir / "link.svg").exists():
-            link_icon.setPixmap(QIcon(str(icon_dir / "link.svg")).pixmap(20, 20))
+        link_path = get_resource_path("assets/icons/link.svg")
+        if Path(link_path).exists():
+            link_icon.setPixmap(QIcon(link_path).pixmap(20, 20))
         else:
             link_icon.setText("L")
         url_title_row.addWidget(link_icon)
@@ -242,9 +240,10 @@ class YouTubeDownloaderApp(QMainWindow):
         url_input_layout.addWidget(self.url_entry)
 
         paste_btn = QPushButton(" Paste")
-        if (icon_dir / "clipboard.svg").exists():
+        clip_path = get_resource_path("assets/icons/clipboard.svg")
+        if Path(clip_path).exists():
             from PySide6.QtCore import QSize
-            paste_btn.setIcon(QIcon(str(icon_dir / "clipboard.svg")))
+            paste_btn.setIcon(QIcon(clip_path))
             paste_btn.setIconSize(QSize(16, 16))
         paste_btn.setObjectName("paste_button")
         paste_btn.setMinimumHeight(30)
@@ -256,8 +255,9 @@ class YouTubeDownloaderApp(QMainWindow):
 
         # Fetch button
         self.fetch_btn = QPushButton(" Fetch Info")
-        if (icon_dir / "search.svg").exists():
-            self.fetch_btn.setIcon(QIcon(str(icon_dir / "search.svg")))
+        search_path = get_resource_path("assets/icons/search.svg")
+        if Path(search_path).exists():
+            self.fetch_btn.setIcon(QIcon(search_path))
             self.fetch_btn.setIconSize(QSize(20, 20))
         self.fetch_btn.setObjectName("primary_button")
         self.fetch_btn.setMinimumSize(140, 46)
@@ -312,8 +312,9 @@ class YouTubeDownloaderApp(QMainWindow):
         path_row.addWidget(self.path_display, stretch=1)
 
         browse_btn = QPushButton("")
-        if (icon_dir / "folder.svg").exists():
-            browse_btn.setIcon(QIcon(str(icon_dir / "folder.svg")))
+        folder_path = get_resource_path("assets/icons/folder.svg")
+        if Path(folder_path).exists():
+            browse_btn.setIcon(QIcon(folder_path))
             browse_btn.setIconSize(QSize(20, 20))
         else:
             browse_btn.setText("F")
@@ -327,8 +328,9 @@ class YouTubeDownloaderApp(QMainWindow):
         # Audio only toggle
         audio_row = QHBoxLayout()
         audio_icon = QLabel()
-        if (icon_dir / "music.svg").exists():
-            audio_icon.setPixmap(QIcon(str(icon_dir / "music.svg")).pixmap(22, 22))
+        music_path = get_resource_path("assets/icons/music.svg")
+        if Path(music_path).exists():
+            audio_icon.setPixmap(QIcon(music_path).pixmap(22, 22))
         else:
             audio_icon.setText("M")
         audio_row.addWidget(audio_icon)
@@ -346,8 +348,9 @@ class YouTubeDownloaderApp(QMainWindow):
 
         # Download button
         self.download_btn = QPushButton("  Download")
-        if (icon_dir / "download.svg").exists():
-            self.download_btn.setIcon(QIcon(str(icon_dir / "download.svg")))
+        dl_icon_path = get_resource_path("assets/icons/download.svg")
+        if Path(dl_icon_path).exists():
+            self.download_btn.setIcon(QIcon(dl_icon_path))
             self.download_btn.setIconSize(QSize(24, 24))
         self.download_btn.setObjectName("download_button")
         self.download_btn.setMinimumHeight(52)
@@ -508,11 +511,11 @@ class YouTubeDownloaderApp(QMainWindow):
 
         self.statusBar().showMessage("Fetching video information...")
         self.fetch_btn.setText(" Stop Fetch")
-        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
-        if (icon_dir / "x.svg").exists():
+        x_icon_path = get_resource_path("assets/icons/x.svg")
+        if Path(x_icon_path).exists():
             from PySide6.QtGui import QIcon
             from PySide6.QtCore import QSize
-            self.fetch_btn.setIcon(QIcon(str(icon_dir / "x.svg")))
+            self.fetch_btn.setIcon(QIcon(x_icon_path))
             self.fetch_btn.setIconSize(QSize(16, 16))
         
         self.fetch_thread = VideoInfoThread(url, self.downloader)
@@ -531,11 +534,11 @@ class YouTubeDownloaderApp(QMainWindow):
     def _reset_fetch_btn(self):
         self.fetch_btn.setEnabled(True)
         self.fetch_btn.setText(" Fetch Info")
-        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
-        if (icon_dir / "search.svg").exists():
+        search_path = get_resource_path("assets/icons/search.svg")
+        if Path(search_path).exists():
             from PySide6.QtGui import QIcon
             from PySide6.QtCore import QSize
-            self.fetch_btn.setIcon(QIcon(str(icon_dir / "search.svg")))
+            self.fetch_btn.setIcon(QIcon(search_path))
             self.fetch_btn.setIconSize(QSize(20, 20))
 
     def _on_video_info_fetched(self, info):
@@ -714,9 +717,22 @@ class OAuthLoginThread(QThread):
 
 
 def main():
+    if sys.platform == "win32":
+        import ctypes
+        myappid = "downloaderpro.app.1.0"
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        except Exception:
+            pass
+
     app = QApplication(sys.argv)
     app.setApplicationName("Downloader PRO")
     app.setOrganizationName("DownloaderPRO")
+
+    # Set app-wide icon (important for Taskbar)
+    icon_path = get_resource_path("assets/logo.ico")
+    if Path(icon_path).exists():
+        app.setWindowIcon(QIcon(icon_path))
 
     window = YouTubeDownloaderApp()
     window.show()

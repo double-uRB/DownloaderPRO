@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QFont, QIcon
+from utils import get_resource_path
 
 
 class StatCard(QWidget):
@@ -83,9 +84,9 @@ class DownloadItemCard(QWidget):
         
         # Thumbnail placeholder
         self.thumb = QLabel()
-        icon_dir = Path(__file__).parent.parent / "assets" / "icons"
-        if (icon_dir / "video.svg").exists():
-            self.thumb.setPixmap(QIcon(str(icon_dir / "video.svg")).pixmap(32, 32))
+        video_icon_path = get_resource_path("assets/icons/video.svg")
+        if Path(video_icon_path).exists():
+            self.thumb.setPixmap(QIcon(video_icon_path).pixmap(32, 32))
         else:
             self.thumb.setText("V")
         self.thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -158,8 +159,9 @@ class DownloadItemCard(QWidget):
         btn_layout = QVBoxLayout()
         
         self.pause_btn = QPushButton()
-        if (icon_dir / "pause.svg").exists():
-            self.pause_btn.setIcon(QIcon(str(icon_dir / "pause.svg")))
+        pause_icon_path = get_resource_path("assets/icons/pause.svg")
+        if Path(pause_icon_path).exists():
+            self.pause_btn.setIcon(QIcon(pause_icon_path))
             self.pause_btn.setIconSize(QSize(14, 14))
         else:
             self.pause_btn.setText("||")
@@ -170,8 +172,9 @@ class DownloadItemCard(QWidget):
         btn_layout.addWidget(self.pause_btn)
         
         self.cancel_btn = QPushButton()
-        if (icon_dir / "x.svg").exists():
-            self.cancel_btn.setIcon(QIcon(str(icon_dir / "x.svg")))
+        x_icon_path = get_resource_path("assets/icons/x.svg")
+        if Path(x_icon_path).exists():
+            self.cancel_btn.setIcon(QIcon(x_icon_path))
             self.cancel_btn.setIconSize(QSize(14, 14))
         else:
             self.cancel_btn.setText("X")

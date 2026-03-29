@@ -79,38 +79,79 @@ def download_ffmpeg():
         print(f"❌ Failed to download FFmpeg: {e}")
         print("Please download FFmpeg manually from https://ffmpeg.org/")
 
+def download_aria2c():
+    """Download aria2c if not present"""
+    tools_dir = Path("tools")
+    tools_dir.mkdir(exist_ok=True)
+    
+    aria2_path = tools_dir / "aria2c.exe"
+    
+    if aria2_path.exists():
+        print("✅ aria2c already present")
+        return
+    
+    print("📥 Downloading aria2c (Windows)...")
+    
+    # Download aria2c from GitHub releases
+    aria2_url = "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip"
+    temp_zip = "aria2_temp.zip"
+    
+    try:
+        urllib.request.urlretrieve(aria2_url, temp_zip)
+        
+        with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
+            # Find aria2c.exe in the zip
+            for file_info in zip_ref.filelist:
+                if file_info.filename.endswith('aria2c.exe'):
+                    # Extract only aria2c.exe
+                    with zip_ref.open(file_info) as source:
+                        with open(aria2_path, 'wb') as target:
+                            target.write(source.read())
+                    break
+        
+        os.remove(temp_zip)
+        print("✅ aria2c downloaded successfully")
+        
+    except Exception as e:
+        print(f"❌ Failed to download aria2c: {e}")
+        print("Please download aria2c manually and place it in the tools/ folder.")
+
 def build_executable():
     """Build standalone executable with all dependencies"""
     
-    print("🔨 Building YouTube Downloader executable...")
+    print("🔨 Building Standalone YouTube Downloader Pro...")
     
-    # Download FFmpeg if needed
+    # Ensure tools are present
     download_ffmpeg()
+    download_aria2c()
     
-    # Clean previous builds with safe removal
+    # Clean previous builds
     print("🧹 Cleaning previous builds...")
-    if os.path.exists("dist"):
-        if not safe_rmtree("dist"):
-            print("⚠️  Could not remove dist folder, continuing anyway...")
+    for folder in ["dist", "build"]:
+        if os.path.exists(folder):
+            safe_rmtree(folder)
     
-    if os.path.exists("build"):
-        if not safe_rmtree("build"):
-            print("⚠️  Could not remove build folder, continuing anyway...")
-    
-    # PyInstaller command with FFmpeg bundling
+    # PyInstaller command for a TRULY standalone single file
     cmd = [
-    "pyinstaller",
-    "--onefile",
-    "--windowed", 
-    "--name", "YouTubeDownloader",
-    "--add-data", "tools;tools",
-    "--add-data", "assets;assets",
-    "--hidden-import", "PySide6.QtCore",
-    "--hidden-import", "PySide6.QtWidgets", 
-    "--hidden-import", "PySide6.QtGui",
-    "--collect-all", "PySide6",
-    "--collect-all", "yt_dlp",
-    "src/main.py"
+        "pyinstaller",
+        "--noconfirm",         # Don't ask to overwrite
+        "--clean",             # Clean cache before build
+        "--onefile",
+        "--windowed", 
+        "--name", "YouTubeDownloaderPro",
+        # Bundle both tools into the internal _MEIPASS directory
+        "--add-data", f"tools{os.pathsep}tools",
+        "--add-data", f"assets{os.pathsep}assets",
+        # Explicitly include SVG support
+        "--hidden-import", "PySide6.QtCore",
+        "--hidden-import", "PySide6.QtWidgets", 
+        "--hidden-import", "PySide6.QtGui",
+        "--hidden-import", "PySide6.QtSvg",
+        "--collect-all", "PySide6",
+        "--collect-all", "yt_dlp",
+        # Ensure imports from src/ are found
+        "--paths", "src",
+        "src/main.py"
     ]
     
     # Add icon if available
@@ -118,136 +159,22 @@ def build_executable():
     if icon_path.exists():
         cmd.extend(["--icon", str(icon_path)])
     
+    print(f"🚀 Running PyInstaller...")
     try:
         subprocess.run(cmd, check=True)
-        print("✅ Build completed successfully!")
+        print("\n" + "="*50)
+        print("✨ BUILD SUCCESSFUL! ✨")
+        print("="*50)
         
-        # Copy FFmpeg to dist folder as backup
-        dist_ffmpeg = Path("dist/ffmpeg.exe")
-        tools_ffmpeg = Path("tools/ffmpeg.exe")
-        if tools_ffmpeg.exists():
-            shutil.copy2(tools_ffmpeg, dist_ffmpeg)
-            print("✅ FFmpeg copied to dist folder")
-        
-        print(f"📦 Executable location: {Path('dist/YouTubeDownloader.exe').absolute()}")
-        
-        # Create portable package
-        create_portable_package()
+        output_exe = Path('dist/YouTubeDownloaderPro.exe').absolute()
+        print(f"\n📦 STANDALONE EXE READY: {output_exe}")
+        print("\n💡 This file contains EVERYTHING (Python, FFmpeg, aria2c, icons).")
+        print("✅ You can share just this single file with anyone!")
+        print("="*50)
         
     except subprocess.CalledProcessError as e:
         print(f"❌ Build failed: {e}")
         sys.exit(1)
-
-def create_portable_package():
-    """Create a portable package with better error handling"""
-    print("📦 Creating portable package...")
-    
-    package_dir = Path("YouTubeDownloader_Portable")
-    
-    # Safe removal of existing package directory
-    if package_dir.exists():
-        print("🧹 Removing existing portable package...")
-        if not safe_rmtree(package_dir):
-            print("⚠️  Warning: Could not remove existing package directory")
-            print("💡 Trying to create package anyway...")
-    
-    # Create directory
-    try:
-        package_dir.mkdir(exist_ok=True)
-    except Exception as e:
-        print(f"❌ Could not create package directory: {e}")
-        return
-    
-    # Copy files with individual error handling
-    files_to_copy = [
-        ("dist/YouTubeDownloader.exe", "YouTubeDownloader.exe"),
-        ("dist/ffmpeg.exe", "ffmpeg.exe")
-    ]
-    
-    copied_files = []
-    for src, dst in files_to_copy:
-        src_path = Path(src)
-        dst_path = package_dir / dst
-        
-        if src_path.exists():
-            try:
-                # Remove destination file if it exists
-                if dst_path.exists():
-                    dst_path.chmod(0o777)
-                    dst_path.unlink()
-                
-                shutil.copy2(src_path, dst_path)
-                copied_files.append(dst)
-                print(f"✅ Copied {dst}")
-                
-            except Exception as e:
-                print(f"⚠️  Warning: Could not copy {src}: {e}")
-        else:
-            print(f"⚠️  Warning: {src} not found, skipping...")
-    
-    # Create README
-    try:
-        readme_content = """YouTube Downloader Pro - Portable Edition
-
-✅ FEATURES:
-- Modern GUI with day/night mode
-- Multiple quality options (4K, 1080p, 720p, etc.)
-- Audio-only downloads (MP3)
-- Paste button for easy URL input
-- Progress tracking
-- Remembers your settings
-
-🚀 HOW TO USE:
-1. Double-click YouTubeDownloader.exe
-2. Paste or enter a YouTube URL
-3. Click "Fetch Info" to see video details
-4. Select your preferred quality
-5. Choose download location (optional)
-6. Click "Download Video"
-
-📁 FILES INCLUDED:
-- YouTubeDownloader.exe (main application)
-- ffmpeg.exe (video processing - required)
-
-⚠️ IMPORTANT:
-Keep both files in the same folder!
-
-🔧 TROUBLESHOOTING:
-- If downloads fail, ensure both exe files are together
-- Check your internet connection
-- Some videos may be region-locked
-- Antivirus might flag the app initially (it's safe)
-
-For support, contact: [your-email]
-"""
-        
-        readme_path = package_dir / "README.txt"
-        with open(readme_path, "w", encoding="utf-8") as f:
-            f.write(readme_content)
-        copied_files.append("README.txt")
-        print("✅ Created README.txt")
-        
-    except Exception as e:
-        print(f"⚠️  Warning: Could not create README: {e}")
-    
-    # Final summary
-    if copied_files:
-        print(f"✅ Portable package created: {package_dir}/")
-        print("🎉 Your app is ready to share!")
-        print("📋 Package contents:")
-        for item in package_dir.iterdir():
-            try:
-                size = item.stat().st_size / (1024 * 1024)  # Size in MB
-                print(f"   - {item.name} ({size:.1f} MB)")
-            except Exception:
-                print(f"   - {item.name}")
-        
-        print(f"\n💡 To share with friends:")
-        print(f"   1. Right-click on '{package_dir}' folder")
-        print(f"   2. Choose 'Send to > Compressed (zipped) folder'")
-        print(f"   3. Share the ZIP file!")
-    else:
-        print("❌ No files were copied to the portable package")
 
 if __name__ == "__main__":
     build_executable()

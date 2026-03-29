@@ -2,6 +2,7 @@ import yt_dlp
 import os
 import sys
 import re
+import shutil
 from pathlib import Path
 from app_logger import get_logger
 
@@ -111,20 +112,32 @@ class VideoDownloader:
 
     def setup_ffmpeg_path(self):
         """Setup FFmpeg path for both development and packaged app"""
+        # Search locations for bundled/system ffmpeg
+        ffmpeg_locations = []
+
+        # 1. Search in PyInstaller bundle (Temporary Extraction Directory)
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+            ffmpeg_locations.append(Path(sys._MEIPASS) / 'tools' / 'ffmpeg.exe')
+            ffmpeg_locations.append(Path(sys._MEIPASS) / 'ffmpeg.exe')
+
+        # 2. Search relative to EXE location (Portable/Side-by-side)
         if getattr(sys, 'frozen', False):
             base_path = Path(sys.executable).parent
+            ffmpeg_locations.append(base_path / 'ffmpeg.exe')
+            ffmpeg_locations.append(base_path / 'tools' / 'ffmpeg.exe')
+        
+        # 3. Search relative to script (Development)
         else:
             base_path = Path(__file__).parent.parent
+            ffmpeg_locations.append(base_path / 'tools' / 'ffmpeg.exe')
+            ffmpeg_locations.append(base_path / 'ffmpeg.exe')
 
-        ffmpeg_locations = [
-            base_path / 'ffmpeg.exe',
-            base_path / 'tools' / 'ffmpeg.exe',
-            'ffmpeg.exe'
-        ]
+        # 4. Standard system path
+        ffmpeg_locations.append(Path('ffmpeg.exe'))
 
         self.ffmpeg_path = None
         for location in ffmpeg_locations:
-            if Path(location).exists():
+            if Path(location).exists() or (isinstance(location, str) and shutil.which(location)):
                 self.ffmpeg_path = str(location)
                 break
 
@@ -135,24 +148,33 @@ class VideoDownloader:
 
     def setup_aria2_path(self):
         """Setup aria2c path for both development and packaged app"""
-        import shutil
+        aria2_locations = []
+
+        # 1. Search in PyInstaller bundle (Temporary Extraction Directory)
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+            aria2_locations.append(Path(sys._MEIPASS) / 'tools' / 'aria2c.exe')
+            aria2_locations.append(Path(sys._MEIPASS) / 'aria2c.exe')
+
+        # 2. Search relative to EXE location (Portable/Side-by-side)
         if getattr(sys, 'frozen', False):
             base_path = Path(sys.executable).parent
+            aria2_locations.append(base_path / 'aria2c.exe')
+            aria2_locations.append(base_path / 'tools' / 'aria2c.exe')
+        
+        # 3. Search relative to script (Development)
         else:
             base_path = Path(__file__).parent.parent
-
-        aria2_locations = [
-            base_path / 'aria2c.exe',
-            base_path / 'tools' / 'aria2c.exe',
-        ]
+            aria2_locations.append(base_path / 'tools' / 'aria2c.exe')
+            aria2_locations.append(base_path / 'aria2c.exe')
 
         self.aria2_path = None
         for location in aria2_locations:
             if Path(location).exists():
                 self.aria2_path = str(location)
-                return
+                break
 
-        if shutil.which('aria2c'):
+        # 4. Standard system search
+        if not self.aria2_path and shutil.which('aria2c'):
             self.aria2_path = 'aria2c'
             
         if self.aria2_path:
