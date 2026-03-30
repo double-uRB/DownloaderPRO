@@ -183,10 +183,14 @@ class VideoInfoPanel(QWidget):
             self._load_thumbnail(thumbnail_url)
 
     def _format_number(self, num):
-        if not num: return "—"
-        if num >= 1_000_000_000: return f"{num / 1_000_000_000:.1f}B"
-        elif num >= 1_000_000: return f"{num / 1_000_000:.1f}M"
-        elif num >= 1_000: return f"{num / 1_000:.1f}K"
+        if not num:
+            return "—"
+        if num >= 1_000_000_000:
+            return f"{num / 1_000_000_000:.1f}B"
+        elif num >= 1_000_000:
+            return f"{num / 1_000_000:.1f}M"
+        elif num >= 1_000:
+            return f"{num / 1_000:.1f}K"
         return str(num)
 
     def _load_thumbnail(self, url):
@@ -270,12 +274,18 @@ class QualityCard(QPushButton):
         self.clicked.connect(lambda: self.selected_changed.emit(self.format_id))
 
     def _short_resolution(self, resolution):
-        if "2160" in resolution: return "4K"
-        elif "1080" in resolution: return "HD"
-        elif "720" in resolution: return "720p"
-        elif "480" in resolution: return "480p"
-        elif "360" in resolution: return "360p"
-        elif "Best" in resolution: return "AUTO"
+        if "2160" in resolution:
+            return "4K"
+        elif "1080" in resolution:
+            return "HD"
+        elif "720" in resolution:
+            return "720p"
+        elif "480" in resolution:
+            return "480p"
+        elif "360" in resolution:
+            return "360p"
+        elif "Best" in resolution:
+            return "AUTO"
         return resolution[:4]
 
     def set_selected(self, selected: bool):

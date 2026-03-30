@@ -454,7 +454,15 @@ class VideoDownloader:
                         instructions_callback(match.group(1), match.group(2))
                 if "logged in" in line.lower() or "completed" in line.lower():
                     pass
-            process.wait()
+            # Use bounded timeout for the OAuth completion
+            try:
+                process.wait(timeout=120)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.stdout.close()
+                log.error("YouTube OAuth login timed out after 120 seconds")
+                return False
+
             return True
         except Exception as e:
             log.error("OAuth login failed: %s", e)
@@ -569,6 +577,10 @@ class VideoDownloader:
         """Download audio-only using exact format ID selected by the user."""
         log.info("Advanced audio download - format='%s', url=%s", audio_format_id, url)
         self.progress_callback = progress_callback
+
+        if not self.ffmpeg_path:
+            log.error("FFmpeg required for advanced audio download but not found")
+            return False, "FFmpeg is required for Advanced Audio Download."
 
         ydl_opts = self._build_common_download_opts(output_path, quality_tag, progress_callback)
         ydl_opts['format'] = audio_format_id

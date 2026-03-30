@@ -616,7 +616,6 @@ class YouTubeDownloaderApp(QMainWindow):
             self.download_path = folder
             self.path_display.setText(folder)
             self.settings.set_download_path(folder)
-            self.downloads_page.set_download_path(folder)
 
     def _start_download(self):
         if not self.current_video_info:

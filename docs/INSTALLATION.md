@@ -20,7 +20,7 @@ If you want to modify the code or contribute, follow these steps:
 
 ### 1. Prerequisites
 - **Python 3.10+**: Make sure you have Python installed and added to your PATH.
-- **Tools (Optional)**: If you don't have FFmpeg or aria2c, the application will attempt to download them automatically into the `tools/` folder when first run.
+- **Tools (Optional)**: For merging streams and high-quality audio extraction, **FFmpeg** and **ffprobe** are required. The application handles this automatically: it will attempt to download the latest FFmpeg essentials bundle and extract `ffmpeg.exe`, `ffprobe.exe`, and `aria2c.exe` into the `tools/` folder when first run.
 
 ### 2. Environment Setup
 1.  **Clone the Repo**:
@@ -72,3 +72,9 @@ When running from source, the taskbar icon may sometimes default to the Python l
 
 ### 4K/8K Options Grayed Out
 YouTube restricts high-resolution streams for bots. Use the **Login with YouTube** (OAuth2) feature in the Settings tab to authenticate securely and unlock all premium qualities.
+
+### Audio Streams Missing
+If no audio streams are found in the Advanced Download panel:
+1. Ensure `ffprobe.exe` exists in the `tools/` folder.
+2. The application uses a fallback detection if `ffprobe` is missing, but for full codec metadata (MP3, AAC, etc.), `ffprobe` is required.
+3. Check the logs in `logs/app.log` for any "format probing" errors from `yt-dlp`.

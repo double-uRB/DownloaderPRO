@@ -37,21 +37,41 @@ The application has transitioned from system-emoji icons to a professional **SVG
 This module encapsulates all interactions with the external `yt-dlp` library and filesystem.
 
 ### `VideoDownloader` Class
-- **FFmpeg Discovery**: Locates the `FFmpeg` executable needed for merging video and audio streams.
+- **FFmpeg/ffprobe Discovery**: Locates the `FFmpeg` and `ffprobe` executables in the `tools/` folder. `ffprobe` is critical for accurate audio codec detection.
 - **Turbo Multi-threading (`aria2`)**: Automatically detects the `aria2` executable and configures `yt-dlp` as an external downloader. It uses up to **16 parallel connections** (`-n 16 -x 16 -k 1M`) to maximize bandwidth utilization and bypass per-connection speed limits.
+- **Resilient Stream Parsing**: Implements a robust metadata parser in `parse_available_streams()`. If YouTube's manifest is missing audio codec info (common in DASH streams), the system uses a **resolution-based fallback** (`resolution='audio only'`) to identify valid audio tracks.
+- **Advanced Download Engine**: 
+    - **`download_video_advanced()`**: Merges specific video and audio format IDs selected by the user.
+    - **`download_audio_advanced()`**: Performs high-quality extraction of a single selected audio format.
 - **YouTube Bypass Engine**: Implements a prioritized `player_client` list (`ios`, `android`, `web`) and applies **PO Tokens** (Proof of Origin) to extractor arguments. This prevents 360p caps and "content unavailable" blocks.
 - **Authentication (OAuth2 & Cookies)**: 
     - **OAuth2 Device Flow**: Implements the `start_oauth_login` method which runs a `yt-dlp` subprocess to trigger Google's device activation flow, capturing the link and code for the user.
     - **Custom Cookies**: Provides a fallback for manual Netscape-formatted `cookies.txt` files, bypassing Windows DPAPI (App-Bound Encryption) issues in modern browsers.
 - **`get_video_info()`**: Fetches metadata (title, thumbnails, available quality formats) without actually downloading the video.
-- **`download_video()`**: The primary function that configures `yt-dlp` options and starts the download.
+- **`download_video()`**: The primary function for simple downloads with automatic quality selection.
 
 ### Custom Logging & Progress Parsing
 `YtDlpLogger` intercepts the console output of `yt-dlp`. It uses regex matching on the output stream to extract the download percentage, file size, speed, and ETA. These values are sent via a callback to the UI layer for real-time progress bars.
 
 ---
 
-## 3. Asynchronous Execution (Threading)
+## 3. UI Component Logic
+
+### Advanced Download Panel
+The `AdvancedDownloadPanel` in `ui_components.py` provides a granular interface for selecting specific video and audio streams. It features:
+- **Video Section**: Displays available resolutions, codecs (H.264, VP9, AV1), and bitrates.
+- **Audio Section**: Shows available audio formats (MP3, AAC, OPUS) and bitrates.
+- **Audio-Only Mode**: A toggle that disables the video section and configures the downloader for a pure audio stream.
+
+### Downloads Library (`downloads_page.py`)
+Each download item is managed as a `CompletedItemCard`. These cards feature:
+- **Smart Directory Discovery**: Automatically locates downloaded files in the target directory if the absolute path is unavailable.
+- **System Integration**: Working "Open Folder" (using `explorer /select`) and "Play" (using `os.startfile`) buttons for immediate access to content.
+- **State Management**: Persists download history across application restarts (future implementation).
+
+---
+
+## 4. Asynchronous Execution (Threading)
 To prevent the PySide6 UI from freezing during network requests, all heavy lifting is pushed to background threads using `QThread`.
 
 - **`VideoInfoThread`**: 

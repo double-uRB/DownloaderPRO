@@ -4,8 +4,10 @@ Shows summary stats, active downloads with progress, and completed items.
 """
 
 import os
+import sys
 import subprocess
 from pathlib import Path
+from downloader_core import _format_bytes
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QProgressBar, QSizePolicy, QFrame
@@ -269,20 +271,44 @@ class CompletedItemCard(QWidget):
 
     def _open_folder(self):
         """Open the file's containing folder in the system file explorer."""
-        if self._file_path and os.path.exists(self._file_path):
-            folder = os.path.dirname(self._file_path)
-            # On Windows, select the file in Explorer
-            subprocess.Popen(f'explorer /select,"{self._file_path}"')
-        elif self._file_path:
-            # Try opening the parent folder at least
-            folder = os.path.dirname(self._file_path)
-            if os.path.exists(folder):
-                os.startfile(folder)
+        if not self._file_path or not os.path.exists(self._file_path):
+            # Try opening the parent folder if specific file doesn't exist
+            if self._file_path:
+                folder = os.path.dirname(self._file_path)
+                if os.path.exists(folder):
+                    self._open_path(folder)
+            return
+
+        # On Windows, we want to select the file in Explorer
+        if sys.platform == 'win32':
+            try:
+                # Use list arguments to avoid shell injection
+                subprocess.run(['explorer', '/select,', os.path.normpath(self._file_path)], check=False)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error("Failed to open Explorer select: %s", e)
+                # Fallback to just opening the folder
+                self._open_path(os.path.dirname(self._file_path))
+        else:
+            self._open_path(os.path.dirname(self._file_path))
 
     def _play_file(self):
         """Open the downloaded file with the default system player."""
         if self._file_path and os.path.exists(self._file_path):
-            os.startfile(self._file_path)
+            self._open_path(self._file_path)
+
+    def _open_path(self, path):
+        """Cross-platform helper to open a path with the default system handler."""
+        try:
+            if sys.platform == 'win32':
+                os.startfile(path)
+            elif sys.platform == 'darwin':
+                subprocess.run(['open', path], check=False)
+            else:
+                subprocess.run(['xdg-open', path], check=False)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error("Failed to open path %s: %s", path, e)
 
 
 class DownloadsPage(QWidget):
@@ -431,18 +457,16 @@ class DownloadsPage(QWidget):
                     files = sorted(dl_dir.iterdir(),
                                    key=lambda f: f.stat().st_mtime, reverse=True)
                     for f in files[:10]:  # Check last 10 files
-                        if f.is_file() and title[:20].lower() in f.name.lower():
+                        # Require a longer match to reduce false positives
+                        match_len = min(30, len(title))
+                        if f.is_file() and title[:match_len].lower() in f.name.lower():
                             actual_path = str(f)
-                            file_size = self._format_file_size(f.stat().st_size)
+                            file_size = _format_bytes(f.stat().st_size)
                             break
-                    # If no title match, just use the newest file
-                    if not actual_path and files:
-                        newest = files[0]
-                        if newest.is_file():
-                            actual_path = str(newest)
-                            file_size = self._format_file_size(newest.stat().st_size)
-            except Exception:
-                pass
+                    # Don't fallback to newest—could be wrong file
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug("File discovery failed: %s", e)
 
         completed = CompletedItemCard(title, file_size, "Just now", file_path=actual_path)
         self.completed_layout.insertWidget(0, completed)
@@ -452,12 +476,3 @@ class DownloadsPage(QWidget):
 
         self.active_stat.set_value(str(len(self._download_cards)))
 
-    @staticmethod
-    def _format_file_size(size_bytes):
-        if size_bytes >= 1_073_741_824:
-            return f"{size_bytes / 1_073_741_824:.1f} GB"
-        elif size_bytes >= 1_048_576:
-            return f"{size_bytes / 1_048_576:.1f} MB"
-        elif size_bytes >= 1024:
-            return f"{size_bytes / 1024:.0f} KB"
-        return f"{size_bytes} B"

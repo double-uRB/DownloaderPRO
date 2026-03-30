@@ -51,9 +51,10 @@ If you want to run from source or build your own version:
 | Feature | Details |
 |---|---|
 | **YouTube Login** | Uses Google's Device Flow (OAuth2) to unlock premium streams safely without sharing passwords. |
-| **PO Tokens** | Built-in support for "Proof of Origin" tokens to bypass YouTube's latest anti-bot measures. |
+| **Advanced Mode** | Select exact video/audio formats and bitrates (H.264, VP9, AV1, MP3, AAC) for maximum control. |
+| **Library Actions** | Functional "Open in Folder" and "Play" buttons in the Downloads page with smart file detection. |
 | **Aria2 Acceleration** | Parallel chunk downloading for extremely high speeds even on slower connections. |
-| **Audio Extraction** | High-fidelity MP3 extraction with correct metadata and merging using FFmpeg. |
+| **Resilient Parsing** | Robust audio-only stream detection (resolution-based fallback) even when YouTube metadata is incomplete. |
 | **Custom Patterns** | Flexible filename patterns like `{date}_{title}.{ext}` via Settings. |
 
 ---
