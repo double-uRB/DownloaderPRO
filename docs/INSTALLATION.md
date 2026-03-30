@@ -10,7 +10,8 @@ This is the recommended method for most users as it requires **zero dependencies
 
 1.  **Download**: Get the latest `YouTubeDownloaderPro.exe` from the [GitHub Releases](https://github.com/double-uRB/DownloaderPRO/releases).
 2.  **Run**: Just double-click the EXE to start.
-3.  **Antivirus Notice**: Since this is an unsigned tool, Windows SmartScreen may show a warning. Click "More Info" -> "Run Anyway" to skip it.
+3.  **Platform Support**: The standalone EXE is currently only for Windows users. macOS and Linux users should follow the **Running from Source** guide below.
+4.  **Antivirus Notice**: Since this is an unsigned tool on Windows, SmartScreen may show a warning. Click "More Info" -> "Run Anyway" to skip it.
 
 ---
 

@@ -45,8 +45,9 @@ This module encapsulates all interactions with the external `yt-dlp` library and
     - **`download_audio_advanced()`**: Performs high-quality extraction of a single selected audio format.
 - **YouTube Bypass Engine**: Implements a prioritized `player_client` list (`ios`, `android`, `web`) and applies **PO Tokens** (Proof of Origin) to extractor arguments. This prevents 360p caps and "content unavailable" blocks.
 - **Authentication (OAuth2 & Cookies)**: 
-    - **OAuth2 Device Flow**: Implements the `start_oauth_login` method which runs a `yt-dlp` subprocess to trigger Google's device activation flow, capturing the link and code for the user.
-    - **Custom Cookies**: Provides a fallback for manual Netscape-formatted `cookies.txt` files, bypassing Windows DPAPI (App-Bound Encryption) issues in modern browsers.
+    - **OAuth2 Device Flow**: Implements the `start_oauth_login` method which runs a `yt-dlp` subprocess to trigger Google's device activation flow. It captures the activation link and code and includes a **120-second timeout** to ensure the application remains responsive if the process hangs. It uses a standard dummy URL (YouTube's first video, "Me at the zoo") to safely trigger the extractor without introducing arbitrary or unprofessional links.
+- **Improved Process Safety**: All internal subprocess calls (yt-dlp, FFmpeg, explorer, etc.) use **list-based arguments** instead of shell strings. This prevents shell injection vulnerabilities and ensures robust handling of file paths containing spaces or special characters.
+- **Custom Cookies**: Provides a fallback for manual Netscape-formatted `cookies.txt` files, bypassing Windows DPAPI (App-Bound Encryption) issues in modern browsers.
 - **`get_video_info()`**: Fetches metadata (title, thumbnails, available quality formats) without actually downloading the video.
 - **`download_video()`**: The primary function for simple downloads with automatic quality selection.
 
@@ -66,7 +67,10 @@ The `AdvancedDownloadPanel` in `ui_components.py` provides a granular interface 
 ### Downloads Library (`downloads_page.py`)
 Each download item is managed as a `CompletedItemCard`. These cards feature:
 - **Smart Directory Discovery**: Automatically locates downloaded files in the target directory if the absolute path is unavailable.
-- **System Integration**: Working "Open Folder" (using `explorer /select`) and "Play" (using `os.startfile`) buttons for immediate access to content.
+- **Cross-Platform Integration**: Includes a smart `_open_path` helper that dynamically detects the platform (`sys.platform`) to use the appropriate system handler:
+    - **Windows**: `explorer /select` (to highlight the file) or `os.startfile`.
+    - **macOS**: `open`.
+    - **Linux**: `xdg-open`.
 - **State Management**: Persists download history across application restarts (future implementation).
 
 ---

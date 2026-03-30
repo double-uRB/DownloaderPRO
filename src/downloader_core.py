@@ -439,7 +439,10 @@ class VideoDownloader:
             "--username", "oauth2",
             "--no-download-archive",
             "--flat-playlist",
-            "https://www.youtube.com/watch?v=jvXVmvW8ZQw"
+            # We must provide *some* valid URL to trigger the yt-dlp extractor
+            # which in turn triggers the OAuth2 device auth flow.
+            # Using YouTube's first video ("Me at the zoo") as a neutral standard dummy link.
+            "https://www.youtube.com/watch?v=jNQXAC9IVRw"
         ]
         try:
             process = subprocess.Popen(
@@ -578,14 +581,16 @@ class VideoDownloader:
         log.info("Advanced audio download - format='%s', url=%s", audio_format_id, url)
         self.progress_callback = progress_callback
 
-        if not self.ffmpeg_path:
-            log.error("FFmpeg required for advanced audio download but not found")
-            return False, "FFmpeg is required for Advanced Audio Download."
-
         ydl_opts = self._build_common_download_opts(output_path, quality_tag, progress_callback)
         ydl_opts['format'] = audio_format_id
         # Don't merge to MP4, just extract audio
         ydl_opts.pop('merge_output_format', None)
+
+        if not self.ffmpeg_path:
+            log.error("FFmpeg required for advanced audio download but not found")
+            return False, "FFmpeg is required for Advanced Audio Download."
+            
+        ydl_opts['ffmpeg_location'] = self.ffmpeg_path
         ydl_opts['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
