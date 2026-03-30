@@ -22,7 +22,7 @@ from PySide6.QtCore import Qt, QThread, Signal, QSize
 from PySide6.QtGui import QFont, QIcon
 
 from downloader_core import VideoDownloader
-from ui_components import VideoInfoPanel, QualitySelector, ProgressWidget
+from ui_components import VideoInfoPanel, QualitySelector, ProgressWidget, AdvancedDownloadPanel
 from settings_manager import SettingsManager
 from sidebar import Sidebar
 from theme import generate_stylesheet
@@ -44,6 +44,7 @@ class YouTubeDownloaderApp(QMainWindow):
             use_oauth2=self.settings.get_use_oauth2()
         )
         self.current_video_info = None
+        self.cached_formats = []  # Cache fetched formats — no extra API calls
         self.quality_selector = None
         self.download_counter = 0
 
@@ -96,7 +97,7 @@ class YouTubeDownloaderApp(QMainWindow):
         self.page_stack.addWidget(self.dashboard_page)
 
         # Page 1: Downloads
-        self.downloads_page = DownloadsPage()
+        self.downloads_page = DownloadsPage(download_path=self.download_path)
         self.page_stack.addWidget(self.downloads_page)
 
         # Page 2: Settings
@@ -289,6 +290,33 @@ class YouTubeDownloaderApp(QMainWindow):
         self.quality_container = QVBoxLayout()
         right_layout.addLayout(self.quality_container)
 
+        # ── Advanced Download Toggle ──
+        self.advanced_toggle_btn = QPushButton("  Advanced Download ▼")
+        settings_icon = get_resource_path("assets/icons/settings.svg")
+        if Path(settings_icon).exists():
+            self.advanced_toggle_btn.setIcon(QIcon(settings_icon))
+            self.advanced_toggle_btn.setIconSize(QSize(16, 16))
+        self.advanced_toggle_btn.setObjectName("paste_button")
+        self.advanced_toggle_btn.setMinimumHeight(36)
+        self.advanced_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.advanced_toggle_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.DemiBold))
+        self.advanced_toggle_btn.setCheckable(True)
+        self.advanced_toggle_btn.setChecked(self.settings.get_advanced_mode())
+        self.advanced_toggle_btn.clicked.connect(self._toggle_advanced)
+        right_layout.addWidget(self.advanced_toggle_btn)
+
+        # ── Advanced Download Panel ──
+        self.advanced_panel = AdvancedDownloadPanel()
+        self.advanced_panel.setVisible(self.settings.get_advanced_mode())
+        # Restore saved preferences
+        self.advanced_panel.set_preferences(
+            video_codec=self.settings.get_preferred_video_codec(),
+            audio_codec=self.settings.get_preferred_audio_codec(),
+            bitrate_mode=self.settings.get_preferred_bitrate_mode(),
+            custom_bitrate=self.settings.get_preferred_bitrate_custom(),
+        )
+        right_layout.addWidget(self.advanced_panel)
+
         # Actions panel
         actions_card = QWidget()
         actions_card.setObjectName("surface_card")
@@ -324,27 +352,6 @@ class YouTubeDownloaderApp(QMainWindow):
         path_row.addWidget(browse_btn)
 
         actions_layout.addLayout(path_row)
-
-        # Audio only toggle
-        audio_row = QHBoxLayout()
-        audio_icon = QLabel()
-        music_path = get_resource_path("assets/icons/music.svg")
-        if Path(music_path).exists():
-            audio_icon.setPixmap(QIcon(music_path).pixmap(22, 22))
-        else:
-            audio_icon.setText("M")
-        audio_row.addWidget(audio_icon)
-
-        audio_label = QLabel("Audio (MP3)")
-        audio_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        audio_row.addWidget(audio_label)
-
-        audio_row.addStretch()
-
-        self.audio_only_cb = QCheckBox()
-        audio_row.addWidget(self.audio_only_cb)
-
-        actions_layout.addLayout(audio_row)
 
         # Download button
         self.download_btn = QPushButton("  Download")
@@ -544,12 +551,19 @@ class YouTubeDownloaderApp(QMainWindow):
     def _on_video_info_fetched(self, info):
         self.current_video_info = info
 
+        # Cache formats for advanced panel (no extra API calls)
+        self.cached_formats = info.get('formats', [])
+        duration = info.get('duration', 0)
+
         # Update video info panel
         self.video_info_panel.update_info(info)
         self.video_info_panel.show()
 
         # Show quality selector
-        self._show_quality_selector(info.get('formats', []))
+        self._show_quality_selector(self.cached_formats)
+
+        # Load streams into advanced panel from cached data
+        self.advanced_panel.load_streams(self.cached_formats, duration)
 
         # Show right panel
         self.right_panel.show()
@@ -572,7 +586,25 @@ class YouTubeDownloaderApp(QMainWindow):
                 child.widget().deleteLater()
 
         self.quality_selector = QualitySelector(formats)
+        # Connect resolution_changed to update advanced panel
+        self.quality_selector.resolution_changed.connect(
+            self.advanced_panel.filter_by_resolution
+        )
         self.quality_container.addWidget(self.quality_selector)
+
+    def _toggle_advanced(self):
+        is_on = self.advanced_toggle_btn.isChecked()
+        self.advanced_panel.setVisible(is_on)
+        self.settings.set_advanced_mode(is_on)
+        arrow = "▲" if is_on else "▼"
+        self.advanced_toggle_btn.setText(f"  Advanced Download {arrow}")
+        if is_on and self.quality_selector:
+            # Trigger initial population based on current selection
+            try:
+                height = int(self.quality_selector.get_selected_quality())
+            except (ValueError, TypeError):
+                height = 0
+            self.advanced_panel.filter_by_resolution(height)
 
     # ─── Download ───────────────────────────────────────────────────────────
 
@@ -584,6 +616,7 @@ class YouTubeDownloaderApp(QMainWindow):
             self.download_path = folder
             self.path_display.setText(folder)
             self.settings.set_download_path(folder)
+            self.downloads_page.set_download_path(folder)
 
     def _start_download(self):
         if not self.current_video_info:
@@ -595,9 +628,11 @@ class YouTubeDownloaderApp(QMainWindow):
             return
 
         url = self.url_entry.text().strip()
-        quality = self.quality_selector.get_selected_quality()
         output_path = self.download_path
-        audio_only = self.audio_only_cb.isChecked()
+
+        # Check audio-only from advanced panel (if open), otherwise False
+        advanced_open = self.advanced_toggle_btn.isChecked() and self.advanced_panel.isVisible()
+        audio_only = advanced_open and self.advanced_panel.is_audio_only()
 
         if not output_path:
             QMessageBox.warning(self, "Warning", "Please select a download location")
@@ -611,12 +646,40 @@ class YouTubeDownloaderApp(QMainWindow):
         self.download_counter += 1
         dl_id = f"dl_{self.download_counter}"
         title = self.current_video_info.get('title', 'Unknown')
-        dl_card = self.downloads_page.add_active_download(dl_id, title[:50], "YouTube • MP4")
+        file_type = "YouTube • MP3" if audio_only else "YouTube • MP4"
+        dl_card = self.downloads_page.add_active_download(dl_id, title[:50], file_type)
 
-        # Start download thread
-        self.download_thread = DownloadThread(
-            url, quality, output_path, audio_only, self.downloader
-        )
+        # Determine download mode
+        if audio_only and advanced_open:
+            # Audio-only with specific format from advanced panel
+            aud_id = self.advanced_panel.get_selected_audio_format_id()
+            if aud_id:
+                self.download_thread = AudioDownloadThread(
+                    url, aud_id, output_path, self.downloader
+                )
+            else:
+                # Fallback to simple audio download
+                self.download_thread = DownloadThread(
+                    url, 'auto', output_path, True, self.downloader
+                )
+        elif advanced_open and not audio_only:
+            vid_id, aud_id = self.advanced_panel.get_selected_format_ids()
+            if vid_id and aud_id:
+                quality_tag = self.advanced_panel.get_quality_tag()
+                self.download_thread = AdvancedDownloadThread(
+                    url, vid_id, aud_id, output_path, quality_tag, self.downloader
+                )
+            else:
+                quality = self.quality_selector.get_selected_quality()
+                self.download_thread = DownloadThread(
+                    url, quality, output_path, False, self.downloader
+                )
+        else:
+            quality = self.quality_selector.get_selected_quality()
+            self.download_thread = DownloadThread(
+                url, quality, output_path, audio_only, self.downloader
+            )
+
         self.download_thread.progress_updated.connect(progress_widget.update_progress)
         self.download_thread.progress_updated.connect(
             lambda p, s: self.downloads_page.update_download_progress(dl_id, p, s)
@@ -631,12 +694,31 @@ class YouTubeDownloaderApp(QMainWindow):
         self.download_thread.download_failed.connect(
             lambda err: log.error("Download failed for '%s': %s", title[:50], err)
         )
+
+        # Wire cancel button
+        def _cancel_download():
+            log.info("User cancelled download for: %s", title[:50])
+            if self.download_thread and self.download_thread.isRunning():
+                self.download_thread.terminate()
+                self.download_thread.wait(2000)
+            progress_widget.download_failed("Cancelled by user")
+            self.statusBar().showMessage("Download cancelled")
+
+        progress_widget.cancel_requested.connect(_cancel_download)
         self.download_thread.start()
 
-        log.info("Download started for: %s (quality=%s)", title[:50], quality)
+        mode_str = "advanced" if (advanced_open and not audio_only) else "simple"
+        log.info("Download started (%s) for: %s", mode_str, title[:50])
         self.statusBar().showMessage("Download started...")
 
     def closeEvent(self, event):
+        # Save advanced download preferences
+        if hasattr(self, 'advanced_panel'):
+            prefs = self.advanced_panel.get_preferences()
+            self.settings.set_preferred_video_codec(prefs['video_codec'])
+            self.settings.set_preferred_audio_codec(prefs['audio_codec'])
+            self.settings.set_preferred_bitrate_mode(prefs['bitrate_mode'])
+            self.settings.set_preferred_bitrate_custom(prefs['custom_bitrate'])
         self.settings.save_settings()
         event.accept()
 
@@ -685,7 +767,6 @@ class DownloadThread(QThread):
                 self.url, self.quality, self.output_path,
                 self.audio_only, progress_callback
             )
-            # Handle both old (bool) and new (tuple) return formats
             if isinstance(result, tuple):
                 success, error_msg = result
             else:
@@ -698,6 +779,78 @@ class DownloadThread(QThread):
         except Exception as e:
             self.download_failed.emit(str(e))
 
+
+class AdvancedDownloadThread(QThread):
+    """Download thread using exact format IDs from Advanced mode."""
+    progress_updated = Signal(int, str)
+    download_completed = Signal()
+    download_failed = Signal(str)
+
+    def __init__(self, url, video_format_id, audio_format_id, output_path,
+                 quality_tag, downloader):
+        super().__init__()
+        self.url = url
+        self.video_format_id = video_format_id
+        self.audio_format_id = audio_format_id
+        self.output_path = output_path
+        self.quality_tag = quality_tag
+        self.downloader = downloader
+
+    def run(self):
+        def progress_callback(progress, status):
+            self.progress_updated.emit(int(progress), status)
+
+        try:
+            result = self.downloader.download_video_advanced(
+                self.url, self.video_format_id, self.audio_format_id,
+                self.output_path, self.quality_tag, progress_callback
+            )
+            if isinstance(result, tuple):
+                success, error_msg = result
+            else:
+                success, error_msg = result, None
+
+            if success:
+                self.download_completed.emit()
+            else:
+                self.download_failed.emit(error_msg or "Unknown error")
+        except Exception as e:
+            self.download_failed.emit(str(e))
+
+
+class AudioDownloadThread(QThread):
+    """Download thread for audio-only using exact format ID from Advanced mode."""
+    progress_updated = Signal(int, str)
+    download_completed = Signal()
+    download_failed = Signal(str)
+
+    def __init__(self, url, audio_format_id, output_path, downloader):
+        super().__init__()
+        self.url = url
+        self.audio_format_id = audio_format_id
+        self.output_path = output_path
+        self.downloader = downloader
+
+    def run(self):
+        def progress_callback(progress, status):
+            self.progress_updated.emit(int(progress), status)
+
+        try:
+            result = self.downloader.download_audio_advanced(
+                self.url, self.audio_format_id, self.output_path,
+                quality_tag="audio", progress_callback=progress_callback
+            )
+            if isinstance(result, tuple):
+                success, error_msg = result
+            else:
+                success, error_msg = result, None
+
+            if success:
+                self.download_completed.emit()
+            else:
+                self.download_failed.emit(error_msg or "Unknown error")
+        except Exception as e:
+            self.download_failed.emit(str(e))
 
 class OAuthLoginThread(QThread):
     instructions_received = Signal(str, str)

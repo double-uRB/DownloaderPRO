@@ -25,6 +25,12 @@ class SettingsManager:
             "po_token": "",
             "cookies_path": "",
             "use_oauth2": False,
+            # Advanced download preferences
+            "advanced_mode_enabled": False,
+            "preferred_video_codec": "auto",
+            "preferred_audio_codec": "auto",
+            "preferred_bitrate_mode": "balanced",
+            "preferred_bitrate_custom": 0,
         }
         self.settings = self.load_settings()
 
@@ -93,4 +99,41 @@ class SettingsManager:
 
     def set_use_oauth2(self, enabled):
         self.settings["use_oauth2"] = enabled
+        self.save_settings()
+
+    # ── Advanced Download Preferences ─────────────────────────────────
+
+    def get_advanced_mode(self):
+        return self.settings.get("advanced_mode_enabled", False)
+
+    def set_advanced_mode(self, enabled):
+        self.settings["advanced_mode_enabled"] = enabled
+        self.save_settings()
+
+    def get_preferred_video_codec(self):
+        return self.settings.get("preferred_video_codec", "auto")
+
+    def set_preferred_video_codec(self, codec):
+        self.settings["preferred_video_codec"] = codec
+        self.save_settings()
+
+    def get_preferred_audio_codec(self):
+        return self.settings.get("preferred_audio_codec", "auto")
+
+    def set_preferred_audio_codec(self, codec):
+        self.settings["preferred_audio_codec"] = codec
+        self.save_settings()
+
+    def get_preferred_bitrate_mode(self):
+        return self.settings.get("preferred_bitrate_mode", "balanced")
+
+    def set_preferred_bitrate_mode(self, mode):
+        self.settings["preferred_bitrate_mode"] = mode
+        self.save_settings()
+
+    def get_preferred_bitrate_custom(self):
+        return self.settings.get("preferred_bitrate_custom", 0)
+
+    def set_preferred_bitrate_custom(self, kbps):
+        self.settings["preferred_bitrate_custom"] = kbps
         self.save_settings()

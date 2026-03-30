@@ -3,6 +3,8 @@ Downloads management page for Downloader PRO.
 Shows summary stats, active downloads with progress, and completed items.
 """
 
+import os
+import subprocess
 from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -16,7 +18,7 @@ from utils import get_resource_path
 class StatCard(QWidget):
     """A compact stat card (Active Downloads, Avg Speed, Storage)."""
 
-    def __init__(self, icon, label, value, unit="", parent=None):
+    def __init__(self, icon_name, label, value, unit="", parent=None):
         super().__init__(parent)
         self.setObjectName("surface_card")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -26,9 +28,13 @@ class StatCard(QWidget):
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(14)
 
-        # Icon container
-        icon_label = QLabel(icon)
-        icon_label.setFont(QFont("Segoe UI", 20))
+        # Icon container — use SVG if available
+        icon_label = QLabel()
+        icon_path = get_resource_path(f"assets/icons/{icon_name}.svg")
+        if Path(icon_path).exists():
+            icon_label.setPixmap(QIcon(icon_path).pixmap(24, 24))
+        else:
+            icon_label.setText(icon_name[:2])
         icon_label.setFixedSize(44, 44)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon_label.setStyleSheet("background-color: rgba(76, 215, 246, 0.1); border-radius: 10px;")
@@ -194,10 +200,11 @@ class DownloadItemCard(QWidget):
 
 
 class CompletedItemCard(QWidget):
-    """A compact completed download item."""
+    """A compact completed download item with working Open Folder and Play buttons."""
 
-    def __init__(self, title, file_size, completion_time, parent=None):
+    def __init__(self, title, file_size, completion_time, file_path="", parent=None):
         super().__init__(parent)
+        self._file_path = file_path
         self.setObjectName("surface_card_low")
         self.setMinimumHeight(64)
 
@@ -206,8 +213,13 @@ class CompletedItemCard(QWidget):
         layout.setSpacing(14)
 
         # Icon
-        icon = QLabel("📄")
-        icon.setFont(QFont("Segoe UI", 18))
+        icon = QLabel()
+        file_icon_path = get_resource_path("assets/icons/file.svg")
+        if Path(file_icon_path).exists():
+            icon.setPixmap(QIcon(file_icon_path).pixmap(22, 22))
+        else:
+            icon.setText("📄")
+            icon.setFont(QFont("Segoe UI", 18))
         icon.setFixedSize(42, 42)
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon.setStyleSheet("background-color: rgba(76, 215, 246, 0.08); border-radius: 8px;")
@@ -228,25 +240,58 @@ class CompletedItemCard(QWidget):
 
         layout.addLayout(info_col, stretch=1)
 
-        # Actions
-        open_btn = QPushButton("Open Folder")
+        # Actions — Open Folder
+        open_btn = QPushButton()
+        folder_icon_path = get_resource_path("assets/icons/folder.svg")
+        if Path(folder_icon_path).exists():
+            open_btn.setIcon(QIcon(folder_icon_path))
+            open_btn.setIconSize(QSize(16, 16))
+        open_btn.setText("  Open Folder")
         open_btn.setFixedHeight(30)
         open_btn.setFont(QFont("Segoe UI", 10))
+        open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        open_btn.clicked.connect(self._open_folder)
         layout.addWidget(open_btn)
 
-        play_btn = QPushButton("Play")
+        # Actions — Play
+        play_btn = QPushButton()
+        video_icon_path = get_resource_path("assets/icons/video.svg")
+        if Path(video_icon_path).exists():
+            play_btn.setIcon(QIcon(video_icon_path))
+            play_btn.setIconSize(QSize(16, 16))
+        play_btn.setText("  Play")
         play_btn.setObjectName("primary_button")
         play_btn.setFixedHeight(30)
         play_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        play_btn.clicked.connect(self._play_file)
         layout.addWidget(play_btn)
+
+    def _open_folder(self):
+        """Open the file's containing folder in the system file explorer."""
+        if self._file_path and os.path.exists(self._file_path):
+            folder = os.path.dirname(self._file_path)
+            # On Windows, select the file in Explorer
+            subprocess.Popen(f'explorer /select,"{self._file_path}"')
+        elif self._file_path:
+            # Try opening the parent folder at least
+            folder = os.path.dirname(self._file_path)
+            if os.path.exists(folder):
+                os.startfile(folder)
+
+    def _play_file(self):
+        """Open the downloaded file with the default system player."""
+        if self._file_path and os.path.exists(self._file_path):
+            os.startfile(self._file_path)
 
 
 class DownloadsPage(QWidget):
     """Full downloads management page."""
 
-    def __init__(self, parent=None):
+    def __init__(self, download_path="", parent=None):
         super().__init__(parent)
         self._download_cards: dict[str, DownloadItemCard] = {}
+        self._download_path = download_path  # Default download folder
         self._setup_ui()
 
     def _setup_ui(self):
@@ -344,6 +389,10 @@ class DownloadsPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(scroll)
 
+    def set_download_path(self, path):
+        """Update the default download path."""
+        self._download_path = path
+
     def _on_filter_click(self, idx):
         for i, btn in enumerate(self.filter_buttons):
             btn.setProperty("active", "true" if i == idx else "false")
@@ -364,17 +413,51 @@ class DownloadsPage(QWidget):
         if download_id in self._download_cards:
             self._download_cards[download_id].update_progress(progress, status)
 
-    def complete_download(self, download_id, title, file_size):
+    def complete_download(self, download_id, title, file_size, file_path=""):
         """Move a download from active to completed."""
         if download_id in self._download_cards:
             card = self._download_cards.pop(download_id)
             card.setParent(None)
             card.deleteLater()
 
-        completed = CompletedItemCard(title, file_size, "Just now")
+        # If no file_path, try to find the file in the download directory
+        actual_path = file_path
+        if not actual_path and self._download_path:
+            # Look for the most recently created file matching the title
+            try:
+                dl_dir = Path(self._download_path)
+                if dl_dir.exists():
+                    # Get files sorted by modification time (newest first)
+                    files = sorted(dl_dir.iterdir(),
+                                   key=lambda f: f.stat().st_mtime, reverse=True)
+                    for f in files[:10]:  # Check last 10 files
+                        if f.is_file() and title[:20].lower() in f.name.lower():
+                            actual_path = str(f)
+                            file_size = self._format_file_size(f.stat().st_size)
+                            break
+                    # If no title match, just use the newest file
+                    if not actual_path and files:
+                        newest = files[0]
+                        if newest.is_file():
+                            actual_path = str(newest)
+                            file_size = self._format_file_size(newest.stat().st_size)
+            except Exception:
+                pass
+
+        completed = CompletedItemCard(title, file_size, "Just now", file_path=actual_path)
         self.completed_layout.insertWidget(0, completed)
 
         if not self._download_cards:
             self.no_downloads_label.setVisible(True)
 
         self.active_stat.set_value(str(len(self._download_cards)))
+
+    @staticmethod
+    def _format_file_size(size_bytes):
+        if size_bytes >= 1_073_741_824:
+            return f"{size_bytes / 1_073_741_824:.1f} GB"
+        elif size_bytes >= 1_048_576:
+            return f"{size_bytes / 1_048_576:.1f} MB"
+        elif size_bytes >= 1024:
+            return f"{size_bytes / 1024:.0f} KB"
+        return f"{size_bytes} B"
