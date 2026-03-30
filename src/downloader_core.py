@@ -590,7 +590,6 @@ class VideoDownloader:
             log.error("FFmpeg required for advanced audio download but not found")
             return False, "FFmpeg is required for Advanced Audio Download."
             
-        ydl_opts['ffmpeg_location'] = self.ffmpeg_path
         ydl_opts['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
