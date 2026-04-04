@@ -1,9 +1,10 @@
-# VDP/requirements.txt
-# This file lists the dependencies for the YouTube Downloader Portable project.
+# YouTube Downloader Pro: Pinned Dependencies
+# Use: pip install -r requirements.txt
 
-PySide6>=6.6.0
-yt-dlp>=2023.12.30
-Pillow>=10.0.0
-pyperclip>=1.8.2
-pyinstaller>=6.0.0
-# Note: Ensure that the versions are compatible with your Python environment.
+PySide6==6.8.2.1
+PySide6-WebEngine==6.8.2.1
+yt-dlp==2025.3.31
+keyring==25.6.0
+Pillow==11.1.0
+pyperclip==1.9.0
+pyinstaller==6.12.0

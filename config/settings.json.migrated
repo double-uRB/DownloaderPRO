@@ -1,0 +1,20 @@
+{
+  "theme": "dark",
+  "download_path": "D:/Download/Test Files",
+  "last_quality": "auto",
+  "audio_only": false,
+  "window_geometry": "900x650",
+  "filename_pattern": "{date}_{filename}.{ext}",
+  "auto_resume": true,
+  "max_concurrent": 10,
+  "speed_limit": 0,
+  "thread_intensity": "extreme",
+  "po_token": "",
+  "cookies_path": "",
+  "use_oauth2": false,
+  "advanced_mode_enabled": true,
+  "preferred_video_codec": "auto",
+  "preferred_audio_codec": "unknown",
+  "preferred_bitrate_mode": "balanced",
+  "preferred_bitrate_custom": 0
+}

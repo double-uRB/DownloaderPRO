@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QProgressBar, QSizePolicy, QFrame
 )
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Qt, Signal, QSize, QTimer
 from PySide6.QtGui import QFont, QIcon
 from utils import get_resource_path
 
@@ -110,6 +110,7 @@ class DownloadItemCard(QWidget):
         title_row = QHBoxLayout()
         title_label = QLabel(title)
         title_label.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        title_label.setWordWrap(True)
         title_row.addWidget(title_label)
         title_row.addStretch()
 
@@ -204,6 +205,8 @@ class DownloadItemCard(QWidget):
 class CompletedItemCard(QWidget):
     """A compact completed download item with working Open Folder and Play buttons."""
 
+    play_in_app = Signal(str)
+
     def __init__(self, title, file_size, completion_time, file_path="", parent=None):
         super().__init__(parent)
         self._file_path = file_path
@@ -233,6 +236,7 @@ class CompletedItemCard(QWidget):
 
         title_label = QLabel(title)
         title_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        title_label.setWordWrap(True)
         info_col.addWidget(title_label)
 
         detail_label = QLabel(f"{file_size} • {completion_time}")
@@ -293,9 +297,9 @@ class CompletedItemCard(QWidget):
             self._open_path(os.path.dirname(self._file_path))
 
     def _play_file(self):
-        """Open the downloaded file with the default system player."""
+        """Open the downloaded file with the built-in media player."""
         if self._file_path and os.path.exists(self._file_path):
-            self._open_path(self._file_path)
+            self.play_in_app.emit(self._file_path)
 
     def _open_path(self, path):
         """Cross-platform helper to open a path with the default system handler."""
@@ -314,11 +318,24 @@ class CompletedItemCard(QWidget):
 class DownloadsPage(QWidget):
     """Full downloads management page."""
 
-    def __init__(self, download_path="", parent=None):
+    play_in_app_requested = Signal(str)
+
+    def __init__(self, download_path="", history_manager=None, parent=None):
         super().__init__(parent)
         self._download_cards: dict[str, DownloadItemCard] = {}
-        self._download_path = download_path  # Default download folder
+        self._download_path = download_path
+        self._history_manager = history_manager
+        
         self._setup_ui()
+        
+        # Batch loading state
+        self._history_index = 0
+        self._batch_size = 10
+        self._loading_timer = None
+        
+        # Load initial history batch after a short delay
+        if self._history_manager:
+            QTimer.singleShot(100, self._load_more_history)
 
     def _setup_ui(self):
         # Scroll area wrapper
@@ -439,40 +456,51 @@ class DownloadsPage(QWidget):
         if download_id in self._download_cards:
             self._download_cards[download_id].update_progress(progress, status)
 
+    def _load_more_history(self):
+        """Append a batch of history items to the list without freezing the UI."""
+        if not self._history_manager:
+            return
+            
+        items = self._history_manager.get_items(self._history_index, self._batch_size)
+        if not items:
+            return
+
+        for item in items:
+            # We don't recalculate size/discovery for history, we trust the database
+            title = item.get('title', 'Unknown')
+            size = item.get('size', 'Downloaded')
+            date = item.get('date', 'Previous session')
+            path = item.get('file_path', '')
+            
+            card = CompletedItemCard(title, size, date, file_path=path)
+            card.play_in_app.connect(self.play_in_app_requested.emit)
+            self.completed_layout.addWidget(card)
+            
+        self._history_index += len(items)
+        
+        # If there's more to load, schedule next batch
+        if len(items) == self._batch_size:
+            # Short delay to let the UI breathe
+            QTimer.singleShot(50, self._load_more_history)
+        else:
+            # Loaded everything for now. Add stretch at the end once if needed
+            self.completed_layout.addStretch()
+
     def complete_download(self, download_id, title, file_size, file_path=""):
-        """Move a download from active to completed."""
+        """Move a download from active to completed and update local UI."""
         if download_id in self._download_cards:
             card = self._download_cards.pop(download_id)
             card.setParent(None)
             card.deleteLater()
 
-        # If no file_path, try to find the file in the download directory
-        actual_path = file_path
-        if not actual_path and self._download_path:
-            # Look for the most recently created file matching the title
-            try:
-                dl_dir = Path(self._download_path)
-                if dl_dir.exists():
-                    # Get files sorted by modification time (newest first)
-                    files = sorted(dl_dir.iterdir(),
-                                   key=lambda f: f.stat().st_mtime, reverse=True)
-                    for f in files[:10]:  # Check last 10 files
-                        # Require a longer match to reduce false positives
-                        match_len = min(30, len(title))
-                        if f.is_file() and title[:match_len].lower() in f.name.lower():
-                            actual_path = str(f)
-                            file_size = _format_bytes(f.stat().st_size)
-                            break
-                    # Don't fallback to newest—could be wrong file
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).debug("File discovery failed: %s", e)
-
-        completed = CompletedItemCard(title, file_size, "Just now", file_path=actual_path)
+        # Build card and add to top of recent list
+        completed = CompletedItemCard(title, file_size, "Just now", file_path=file_path)
+        completed.play_in_app.connect(self.play_in_app_requested.emit)
         self.completed_layout.insertWidget(0, completed)
 
         if not self._download_cards:
             self.no_downloads_label.setVisible(True)
 
         self.active_stat.set_value(str(len(self._download_cards)))
+
 

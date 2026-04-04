@@ -1,6 +1,6 @@
 # Downloader PRO
 
-A modern, professional YouTube video and audio downloader built with Python and PySide6. Features a clean, glassmorphic GUI with dark/light themes, high-fidelity quality selection (up to 8K), and robust multithreaded downloading. **Fully compatible with Windows, macOS, and Linux.**
+A modern, professional YouTube video and audio downloader built with Python and PySide6. Evolved into an **All-in-One Media Suite**, it features a fully embedded Chromium browser for discovery, high-fidelity downloading (up to 8K), and a native offline media player. Features a clean, glassmorphic GUI with dark/light themes and robust multithreaded downloading. **Fully compatible with Windows, macOS, and Linux.**
 
 [![Python](https://img.shields.io/badge/-Python-3776AB?style=flat-square&logo=python&logoColor=white)](#) [![PySide6](https://img.shields.io/badge/-PySide6-41CD52?style=flat-square&logo=qt&logoColor=white)](#) [![FFmpeg](https://img.shields.io/badge/-FFmpeg-007808?style=flat-square)](#) [![aria2](https://img.shields.io/badge/-aria2-333333?style=flat-square)](#) [![yt--dlp](https://img.shields.io/badge/-yt--dlp-FF0000?style=flat-square&logo=youtube&logoColor=white)](#)
 
@@ -10,11 +10,14 @@ A modern, professional YouTube video and audio downloader built with Python and 
 
 Unlike most downloaders, Downloader PRO provides a **Zero-Dependency** experience. Our standalone executable bundles everything needed (Python, FFmpeg, aria2c, and SSL certificates) into a single file.
 
+- **🌐 Embedded Browser**: Surf YouTube and media sites directly in the app. URLs are auto-intercepted for one-click downloading!
+- **🎬 Native Video Player**: Play your downloaded media offline immediately without leaving the app.
 - **🚀 10x Faster Downloads**: Integrated `aria2` multithreading for maximum bandwidth utilization.
 - **💎 Ultra-HD Support**: Full 4K and 8K support via official YouTube Account Login (OAuth2).
 - **🎨 Stunning UI**: Modern Glassmorphism design with real-time theme switching.
-- **🛡️ Anti-Block Technology**: Uses PO Tokens and custom client headers to bypass rate limits and "content unavailable" errors.
-- **📦 Portable & Cross-Platform**: No installation required on Windows (standalone `.exe`). Also runs natively from source on macOS and Linux with full system integration.
+- **🛡️ Security Hardened**: Built-in SHA-256 verification for external tools (FFmpeg/aria2c), path traversal protection, and secure credential storage (Keyring/DPAPI).
+- **📦 Portable & Cross-Platform**: No installation required on Windows (standalone `.exe`). Also runs natively with automated tool-chain setup on macOS and Linux.
+
 
 ## 🖼️ Screenshots
 
@@ -53,10 +56,12 @@ If you want to run from source or build your own version:
 | **YouTube Login** | Uses Google's Device Flow (OAuth2) to unlock premium streams safely without sharing passwords. |
 | **Advanced Mode** | Select exact video/audio formats and bitrates (H.264, VP9, AV1, MP3, AAC) for maximum control. |
 | **Library Actions** | Functional "Open in Folder" and "Play" buttons in the Downloads page with cross-platform support (`open`, `xdg-open`, `explorer`) and shell-safe execution. |
-| **Aria2 Acceleration** | Parallel chunk downloading for extremely high speeds even on slower connections. |
-| **Resilient Parsing** | Robust audio-only stream detection (resolution-based fallback) even when YouTube metadata is incomplete. |
-| **Security First** | All internal subprocess calls use list-based arguments to prevent shell injection, ensuring safe execution even with complex file paths. |
-| **Custom Patterns** | Flexible filename patterns like `{date}_{title}.{ext}` via Settings. |
+| **Security Hardening** | SHA-256 binary integrity checks, Windows DPAPI/Keyring token storage, log sanitization (no tokens in logs), and filename path traversal prevention. |
+| **Aria2 Acceleration** | Parallel chunk downloading for extremely high speeds with optimized SSD file allocation. |
+| **Advanced History** | Peristent download history with intelligent batch-loading for zero UI stutters even with thousands of items. |
+| **AIO Browser** | Multitab Chromium-based browser with one-click download interception. |
+| **Native Player** | Integrated QMediaPlayer for offline playback with hardware acceleration. |
+
 
 ---
 

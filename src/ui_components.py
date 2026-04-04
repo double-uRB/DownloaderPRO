@@ -9,13 +9,30 @@ from PySide6.QtWidgets import (
     QFrame, QPushButton, QProgressBar, QSizePolicy, QGridLayout,
     QComboBox, QLineEdit, QCheckBox
 )
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QPixmap, QIcon
+from PySide6.QtCore import Qt, QTimer, Signal, QUrl, QSize, QThread, QObject
+from PySide6.QtGui import QFont, QPixmap, QIcon, QImage
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
-from PySide6.QtCore import QUrl, QSize
 from pathlib import Path
 from utils import get_resource_path
 from downloader_core import parse_available_streams, estimate_file_size, _format_bytes, _format_bitrate
+
+
+class ImageProcessor(QThread):
+    """Processes image data into a scaled pixmap in a background thread."""
+    finished = Signal(QPixmap)
+
+    def __init__(self, data, target_width):
+        super().__init__()
+        self.data = data
+        self.target_width = target_width
+
+    def run(self):
+        image = QImage()
+        if image.loadFromData(self.data):
+            # Scaling in the background thread
+            scaled = image.scaledToWidth(self.target_width, Qt.TransformationMode.SmoothTransformation)
+            pixmap = QPixmap.fromImage(scaled)
+            self.finished.emit(pixmap)
 
 
 class VideoInfoPanel(QWidget):
@@ -201,16 +218,17 @@ class VideoInfoPanel(QWidget):
     def _on_thumbnail_loaded(self, reply):
         if reply.error() == QNetworkReply.NetworkError.NoError:
             data = reply.readAll()
-            pixmap = QPixmap()
-            pixmap.loadFromData(data)
-            if not pixmap.isNull():
-                scaled = pixmap.scaledToWidth(
-                    self.thumbnail_container.width(),
-                    Qt.TransformationMode.SmoothTransformation
-                )
-                self.thumbnail_label.setPixmap(scaled)
-                self.thumbnail_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            # Offload heavy image loading and scaling to a background worker
+            self.thumbnail_worker = ImageProcessor(data, self.thumbnail_container.width())
+            self.thumbnail_worker.finished.connect(self._set_thumbnail_pixmap)
+            self.thumbnail_worker.start()
         reply.deleteLater()
+
+    def _set_thumbnail_pixmap(self, pixmap):
+        """Sets the scaled pixmap once processing is complete."""
+        if not pixmap.isNull():
+            self.thumbnail_label.setPixmap(pixmap)
+            self.thumbnail_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
 
 class QualityCard(QPushButton):

@@ -7,6 +7,13 @@ import sys
 import os
 import pyperclip
 from pathlib import Path
+
+# Disable hardware-accelerated video decoding to prevent
+# "Static surface pool size exceeded" VP9/AV1 crashes on Windows.
+# This forces software (CPU) decoding via FFmpeg, which is more stable.
+os.environ["QT_MEDIA_BACKEND"] = "ffmpeg"
+os.environ["QSG_RHI_PREFER_SOFTWARE_RENDERER"] = "1"
+
 from app_logger import get_logger
 
 # Window icon and taskbar handling will be done in main()
@@ -28,6 +35,9 @@ from sidebar import Sidebar
 from theme import generate_stylesheet
 from downloads_page import DownloadsPage
 from settings_page import SettingsPage
+from browser_page import WebBrowserPage
+from video_player import VideoPlayerPage
+from history_manager import HistoryManager
 from utils import get_resource_path
 
 
@@ -38,6 +48,7 @@ class YouTubeDownloaderApp(QMainWindow):
 
         # Initialize managers
         self.settings = SettingsManager()
+        self.history = HistoryManager()
         self.downloader = VideoDownloader(
             po_token=self.settings.get_po_token(),
             cookies_path=self.settings.get_cookies_path(),
@@ -96,11 +107,26 @@ class YouTubeDownloaderApp(QMainWindow):
         self.dashboard_page = self._create_dashboard_page()
         self.page_stack.addWidget(self.dashboard_page)
 
-        # Page 1: Downloads
-        self.downloads_page = DownloadsPage(download_path=self.download_path)
+        # Page 1: Browser
+        self.browser_page = WebBrowserPage()
+        self.browser_page.video_url_detected.connect(self._on_video_url_detected)
+        self.browser_page.full_screen_requested.connect(self._on_fullscreen_requested)
+        self.page_stack.addWidget(self.browser_page)
+
+        # Page 2: Downloads
+        self.downloads_page = DownloadsPage(
+            download_path=self.download_path,
+            history_manager=self.history
+        )
+        self.downloads_page.play_in_app_requested.connect(self._play_video_in_player)
         self.page_stack.addWidget(self.downloads_page)
 
-        # Page 2: Settings
+        # Page 3: Player
+        self.player_page = VideoPlayerPage()
+        self.player_page.full_screen_requested.connect(self._on_fullscreen_requested)
+        self.page_stack.addWidget(self.player_page)
+
+        # Page 4: Settings
         self.settings_page = SettingsPage(self.settings)
         self.settings_page.theme_changed.connect(self._on_theme_changed)
         self.settings_page.settings_changed.connect(self._on_settings_saved)
@@ -113,11 +139,11 @@ class YouTubeDownloaderApp(QMainWindow):
 
     def _create_top_header(self, parent_layout):
         """Top bar with page title, theme toggle, and user avatar."""
-        header = QWidget()
-        header.setObjectName("top_header")
-        header.setMinimumHeight(56)
+        self.top_header = QWidget()
+        self.top_header.setObjectName("top_header")
+        self.top_header.setMinimumHeight(56)
 
-        h_layout = QHBoxLayout(header)
+        h_layout = QHBoxLayout(self.top_header)
         h_layout.setContentsMargins(24, 0, 24, 0)
         h_layout.setSpacing(12)
 
@@ -188,7 +214,18 @@ class YouTubeDownloaderApp(QMainWindow):
         avatar.setStyleSheet("background-color: #2d3449; border-radius: 17px; border: 1px solid rgba(76, 215, 246, 0.2);")
         h_layout.addWidget(avatar)
 
-        parent_layout.addWidget(header)
+        parent_layout.addWidget(self.top_header)
+
+    def _on_fullscreen_requested(self, is_fullscreen):
+        """Handles maximizing the main window and hiding navigation for immersive media."""
+        if is_fullscreen:
+            self.sidebar.hide()
+            self.top_header.hide()
+            self.showFullScreen()
+        else:
+            self.sidebar.show()
+            self.top_header.show()
+            self.showNormal()
 
     def _create_dashboard_page(self):
         """Build the dashboard page (URL input + video info + quality + download)."""
@@ -391,10 +428,12 @@ class YouTubeDownloaderApp(QMainWindow):
     # ─── Navigation ─────────────────────────────────────────────────────────
 
     def _on_page_changed(self, page_key):
-        page_map = {"dashboard": 0, "downloads": 1, "settings": 2}
+        page_map = {"dashboard": 0, "browser": 1, "downloads": 2, "player": 3, "settings": 4}
         title_map = {
             "dashboard": ("Dashboard", "MANAGING ACTIVE TASKS"),
+            "browser": ("Browser", "WEB DISCOVERY"),
             "downloads": ("Downloads", "LIBRARY & QUEUE"),
+            "player": ("Player", "NATIVE MEDIA PLAYBACK"),
             "settings": ("Settings", "APP CONFIGURATION"),
         }
         idx = page_map.get(page_key, 0)
@@ -402,6 +441,19 @@ class YouTubeDownloaderApp(QMainWindow):
         title, subtitle = title_map.get(page_key, ("Dashboard", ""))
         self.page_title.setText(title)
         self.page_subtitle.setText(subtitle)
+        
+        # Auto-pause media player when switching away
+        if page_key != "player" and hasattr(self, 'player_page'):
+            self.player_page.stop_playback()
+
+    def _on_video_url_detected(self, url):
+        self.url_entry.setText(url)
+        self.sidebar.set_active_page("dashboard")
+        self._fetch_video_info()
+
+    def _play_video_in_player(self, file_path):
+        self.sidebar.set_active_page("player")
+        self.player_page.play_file(file_path)
 
     # ─── Theme ──────────────────────────────────────────────────────────────
 
@@ -683,9 +735,8 @@ class YouTubeDownloaderApp(QMainWindow):
         self.download_thread.progress_updated.connect(
             lambda p, s: self.downloads_page.update_download_progress(dl_id, p, s)
         )
-        self.download_thread.download_completed.connect(progress_widget.download_complete)
         self.download_thread.download_completed.connect(
-            lambda: self.downloads_page.complete_download(dl_id, title[:50], "--")
+            lambda: self._handle_download_completed(dl_id, title[:50], output_path, progress_widget)
         )
         self.download_thread.download_failed.connect(
             lambda err: progress_widget.download_failed(err)
@@ -709,6 +760,21 @@ class YouTubeDownloaderApp(QMainWindow):
         mode_str = "advanced" if (advanced_open and not audio_only) else "simple"
         log.info("Download started (%s) for: %s", mode_str, title[:50])
         self.statusBar().showMessage("Download started...")
+
+    def _handle_download_completed(self, dl_id, title, output_path, progress_widget):
+        """Processes a finished download, updates UI, and saves to history."""
+        # Update progress widget
+        progress_widget.download_complete(output_path)
+        
+        # Update downloads page (moves from active to completed list)
+        # Note: complete_download handles finding the file on disk if possible
+        self.downloads_page.complete_download(dl_id, title, "--", output_path)
+        
+        # Persist to history.json
+        self.history.add_item(title, "Downloaded", "Just now", output_path)
+        
+        self.statusBar().showMessage(f"Download completed: {title[:30]}...")
+        log.info("Download finished and saved to history: %s", title)
 
     def closeEvent(self, event):
         # Save advanced download preferences

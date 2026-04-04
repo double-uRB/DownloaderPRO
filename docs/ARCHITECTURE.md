@@ -24,7 +24,9 @@ The UI is built with a modern, glassmorphic design and consists of modular compo
 ### UI Components
 - **`sidebar.py`**: The navigation menu on the left (now using fluid sizing).
 - **`downloads_page.py`**: The queue and history of actively downloading and completed files.
-- **`settings_page.py`**: The configuration interface (theme selection, download path, and advanced YouTube authentication).
+- **`browser_page.py`**: Fully embedded Chromium web browser (`QWebEngineView`) for navigating media sites, with automatic URL interception for one-click downloading.
+- **`video_player.py`**: Native offline media player using `QMediaPlayer` and `QVideoWidget` with transport controls.
+- **`settings_page.py`**: The configuration interface (theme selection, download path).
 - **`ui_components.py`**: Reusable generic widgets, such as `VideoInfoPanel`, `QualitySelector`, and `ProgressWidget`.
 - **`theme.py`**: Manages the dynamic generation of Qt Style Sheets (QSS) for light and dark modes.
 
@@ -94,6 +96,24 @@ To prevent the PySide6 UI from freezing during network requests, all heavy lifti
 
 ---
 
-## Configuration & State Management
-- **`settings_manager.py`**: Uses Python's `json` module to persist user preferences (e.g., default download directory, dark/light theme). The settings are loaded on startup and saved on exit.
-- **`app_logger.py`**: A centralized logging utility to write execution logs to `logs/app.log` and standard output, aiding in debugging.
+## 5. Persistence & Security Layer
+The application manages user data and secrets through a multi-tier persistence system:
+
+### ⚙️ Settings Management (`settings_manager.py`)
+- **Native Storage**: Migrated from simple JSON to **Qt's native `QSettings`** system. On Windows, this utilizes the Registry (`HKEY_CURRENT_USER\Software\DownloaderPRO`), providing a robust and OS-integrated way to handle application preferences.
+- **Secure Secret Storage (`keyring`)**: Sensitive credentials like YouTube **PO Tokens** are no longer stored in plaintext. The system uses the `keyring` library to interface with the host OS's secure credential manager (Windows DPAPI, macOS Keychain, or Linux Secret Service), ensuring that user secrets are encrypted at rest.
+- **Log Sanitization (`app_logger.py`)**: Implements a `SanitizingFilter` that dynamically redacts sensitive patterns (tokens, cookies, auth headers) before they are written to disk. Logs are rotated (5MB limit) to prevent disk exhaustion.
+
+### 📜 History Management (`history_manager.py`)
+- **JSON Metadata**: Completed downloads are persisted in `config/history.json`.
+- **Intelligent Batch Loading**: To maintain a 60fps UI, the `DownloadsPage` implements an **Asynchronous Batch Loader**. It renders history items in small chunks (10 at a time) using a `QTimer`, preventing UI lockup when the history contains thousands of entries.
+
+---
+
+## 6. Build System & Tool Orchestration (`build_app.py`)
+The project features an intelligent, cross-platform build script designed for zero-configuration for the end user.
+
+- **Platform Detection**: Automatically detects the host OS (Windows, Darwin, Linux).
+- **Binary Integrity Verification**: Implements **SHA-256 Checksum Verification** for all automated downloads (FFmpeg and aria2c). This protects against supply chain attacks and ensures the bundled binaries are authentic and uncorrupted.
+- **Linux Native Integration**: For Linux builds, the script prioritizes system-installed binaries via `shutil.which`, ensuring maximum compatibility with various distribution package managers.
+- **Self-Contained Bundling**: Uses PyInstaller to create a **Truly Standalone** binary. The build process packages the Python runtime, all dependencies (PySide6, yt-dlp), and the verified toolchain (FFmpeg/aria2c) into a single, portable executable.

@@ -45,6 +45,14 @@ class NavButton(QPushButton):
         self.style().unpolish(self)
         self.style().polish(self)
 
+    def set_collapsed(self, collapsed: bool):
+        if collapsed:
+            self.setText("")
+            self.setToolTip(self.label_text)
+        else:
+            self._update_text()
+            self.setToolTip("")
+
 
 class Sidebar(QWidget):
     """Collapsible sidebar with navigation and branding."""
@@ -52,14 +60,17 @@ class Sidebar(QWidget):
     page_changed = Signal(str)
 
     PAGES = [
-        ("home", "Dashboard",  "dashboard"),
+        ("home",     "Dashboard",  "dashboard"),
+        ("globe",    "Browser",    "browser"),
         ("download", "Downloads",  "downloads"),
+        ("video",    "Player",     "player"),
         ("settings", "Settings",   "settings"),
     ]
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("sidebar")
+        self.is_collapsed = False
         self.setMinimumWidth(220)
         self.setMaximumWidth(280)
         self.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Expanding)
@@ -77,23 +88,41 @@ class Sidebar(QWidget):
 
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
+        
+        # Hamburger Menu
+        self.menu_btn = QPushButton()
+        self.menu_btn.setObjectName("nav_item") # reuse transparent styling
+        from PySide6.QtGui import QIcon
+        from PySide6.QtCore import QSize
+        menu_path = get_resource_path("assets/icons/menu.svg")
+        if Path(menu_path).exists():
+            self.menu_btn.setIcon(QIcon(menu_path))
+            self.menu_btn.setIconSize(QSize(20, 20))
+        else:
+            self.menu_btn.setText("≡")
+        self.menu_btn.setFixedSize(36, 36)
+        self.menu_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.menu_btn.clicked.connect(self.toggle_collapse)
+        title_row.addWidget(self.menu_btn)
 
-        app_icon = QLabel()
-        app_icon.setFixedSize(36, 36)
+        self.app_icon = QLabel()
+        self.app_icon.setFixedSize(36, 36)
         logo_path = get_resource_path("assets/logo.png")
         if Path(logo_path).exists():
             pixmap = QPixmap(logo_path)
-            app_icon.setPixmap(pixmap.scaled(36, 36, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            self.app_icon.setPixmap(pixmap.scaled(36, 36, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         else:
             fallback_path = get_resource_path("assets/icons/download.svg")
             if Path(fallback_path).exists():
                 from PySide6.QtGui import QIcon
-                app_icon.setPixmap(QIcon(fallback_path).pixmap(32, 32))
+                self.app_icon.setPixmap(QIcon(fallback_path).pixmap(32, 32))
         
-        app_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_row.addWidget(app_icon)
+        self.app_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_row.addWidget(self.app_icon)
 
-        title_col = QVBoxLayout()
+        self.title_col_widget = QWidget()
+        title_col = QVBoxLayout(self.title_col_widget)
+        title_col.setContentsMargins(0, 0, 0, 0)
         title_col.setSpacing(0)
 
         app_title = QLabel("Downloader PRO")
@@ -106,7 +135,7 @@ class Sidebar(QWidget):
         app_subtitle.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
         title_col.addWidget(app_subtitle)
 
-        title_row.addLayout(title_col)
+        title_row.addWidget(self.title_col_widget)
         title_row.addStretch()
         brand_layout.addLayout(title_row)
 
@@ -126,19 +155,19 @@ class Sidebar(QWidget):
         layout.addStretch()
 
         # ── CTA Button ──
-        new_download_btn = QPushButton("  NEW TASK")
+        self.new_download_btn = QPushButton("  NEW TASK")
         from PySide6.QtGui import QIcon
         from PySide6.QtCore import QSize
         plus_icon_path = get_resource_path("assets/icons/plus.svg")
         if Path(plus_icon_path).exists():
-            new_download_btn.setIcon(QIcon(plus_icon_path))
-            new_download_btn.setIconSize(QSize(18, 18))
-        new_download_btn.setObjectName("cta_button")
-        new_download_btn.setMinimumHeight(48)
-        new_download_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        new_download_btn.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        new_download_btn.clicked.connect(lambda: self._on_nav_click("dashboard"))
-        layout.addWidget(new_download_btn)
+            self.new_download_btn.setIcon(QIcon(plus_icon_path))
+            self.new_download_btn.setIconSize(QSize(18, 18))
+        self.new_download_btn.setObjectName("cta_button")
+        self.new_download_btn.setMinimumHeight(48)
+        self.new_download_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.new_download_btn.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self.new_download_btn.clicked.connect(lambda: self._on_nav_click("dashboard"))
+        layout.addWidget(self.new_download_btn)
 
         layout.addSpacing(12)
 
@@ -169,6 +198,32 @@ class Sidebar(QWidget):
         status_row.addStretch()
 
         layout.addLayout(status_row)
+        self.status_text = status_text
+
+    def toggle_collapse(self):
+        """Toggles the sidebar between expanded and collapsed states."""
+        self.is_collapsed = not self.is_collapsed
+        
+        if self.is_collapsed:
+            self.setMinimumWidth(68)
+            self.setMaximumWidth(68)
+            self.title_col_widget.hide()
+            self.app_icon.hide()
+            self.status_text.hide()
+            self.new_download_btn.setText("")
+            self.new_download_btn.setToolTip("New Task")
+            for btn in self.nav_buttons.values():
+                btn.set_collapsed(True)
+        else:
+            self.setMinimumWidth(220)
+            self.setMaximumWidth(280)
+            self.title_col_widget.show()
+            self.app_icon.show()
+            self.status_text.show()
+            self.new_download_btn.setText("  NEW TASK")
+            self.new_download_btn.setToolTip("")
+            for btn in self.nav_buttons.values():
+                btn.set_collapsed(False)
 
     def _on_nav_click(self, page_key: str):
         for key, btn in self.nav_buttons.items():

@@ -22,6 +22,19 @@ def _format_bytes(num_bytes):
     return f"{num_bytes} B"
 
 
+def sanitize_filename(name: str) -> str:
+    """Strip dangerous characters and prevent path traversal in filenames."""
+    # Remove chars that are illegal in Windows filenames
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name)
+    # Prevent traversal segments
+    name = name.replace('..', '_')
+    # Strip dots/spaces from ends (crucial for Windows)
+    name = name.strip('. ')
+    # Limit length to 200 chars
+    return name[:200]
+
+
+
 def _format_speed(speed):
     """Format download speed into human-readable string."""
     if not speed:
@@ -48,37 +61,45 @@ def _has_audio(fmt):
 
 
 def _normalize_codec(raw_codec):
-    """Normalize raw codec string from yt-dlp to a user-friendly name."""
+    """Normalize raw codec string from yt-dlp/extractors to a user-friendly name."""
     if not raw_codec or raw_codec in ('none', 'None', ''):
         return None
     if raw_codec == '?':
         return 'Unknown'
+        
     raw = raw_codec.lower()
-    if 'avc1' in raw or 'h264' in raw:
-        return 'H.264'
-    elif 'hev1' in raw or 'hvc1' in raw or 'h265' in raw or 'hevc' in raw:
-        return 'H.265'
-    elif 'vp9' in raw or 'vp09' in raw:
-        return 'VP9'
-    elif 'av01' in raw or 'av1' in raw:
-        return 'AV1'
-    elif 'mp4a' in raw or 'aac' in raw:
-        return 'AAC'
-    elif 'opus' in raw:
-        return 'Opus'
-    elif 'vorbis' in raw:
-        return 'Vorbis'
-    elif 'mp3' in raw:
-        return 'MP3'
-    elif 'flac' in raw:
-        return 'FLAC'
-    elif 'ec-3' in raw or 'ec3' in raw:
-        return 'Dolby Digital'
-    elif 'ac-3' in raw or 'ac3' in raw:
-        return 'AC-3'
-    elif 'dtse' in raw or 'dts' in raw:
-        return 'DTS'
-    return raw_codec.split('.')[0].upper()
+    
+    # Universal step: Extract base codec before the period profile (e.g., "avc1.640028" -> "avc1")
+    base_codec = raw.split('.')[0]
+    
+    # Dictionary of user-friendly names for UI display
+    codec_map = {
+        'avc1': 'H.264',
+        'h264': 'H.264',
+        'hev1': 'H.265',
+        'hvc1': 'H.265',
+        'hevc': 'H.265',
+        'h265': 'H.265',
+        'vp9': 'VP9',
+        'vp09': 'VP9',
+        'av01': 'AV1',
+        'av1': 'AV1',
+        'mp4a': 'AAC',
+        'aac': 'AAC',
+        'opus': 'Opus',
+        'vorbis': 'Vorbis',
+        'mp3': 'MP3',
+        'flac': 'FLAC',
+        'ec-3': 'Dolby Digital',
+        'ec3': 'Dolby Digital',
+        'ac-3': 'AC-3',
+        'ac3': 'AC-3',
+        'dtse': 'DTS',
+        'dts': 'DTS'
+    }
+    
+    # Return mapped pretty name, or universally fallback to the uppercase base codec
+    return codec_map.get(base_codec, base_codec.upper())
 
 
 def _format_bitrate(bitrate_kbps):
@@ -234,17 +255,13 @@ def estimate_file_size(video_stream, audio_stream, duration):
 
 
 class YtDlpLogger:
-    """Custom logger that captures yt-dlp output and drives progress updates."""
+    """Custom logger that captures yt-dlp output for debugging and info logs."""
 
-    def __init__(self, progress_callback=None):
-        self.progress_callback = progress_callback
+    def __init__(self):
+        pass
 
     def debug(self, msg):
         log.debug("yt-dlp: %s", msg)
-        if self.progress_callback and '[download]' in msg:
-            self._parse_progress_line(msg)
-        elif self.progress_callback and '[#' in msg:
-            self._parse_aria2_line(msg)
 
     def info(self, msg):
         log.info("yt-dlp: %s", msg)
@@ -254,50 +271,6 @@ class YtDlpLogger:
 
     def error(self, msg):
         log.error("yt-dlp: %s", msg)
-
-    def _parse_progress_line(self, msg):
-        """Parse yt-dlp [download] lines."""
-        try:
-            match = re.search(
-                r'(\d+\.?\d*)%\s+of\s+~?([\d.]+)(\w+)\s+at\s+([\d.]+)(\w+/s)\s+ETA\s+(\S+)',
-                msg
-            )
-            if match:
-                percent = float(match.group(1))
-                total_size = match.group(2) + match.group(3)
-                speed = match.group(4) + " " + match.group(5)
-                eta = match.group(6)
-                status = f"{speed} | {total_size} | ETA {eta}"
-                self.progress_callback(percent, status)
-                return
-
-            match = re.search(
-                r'100%\s+of\s+~?([\d.]+)(\w+)\s+in\s+(\S+)',
-                msg
-            )
-            if match:
-                total_size = match.group(1) + match.group(2)
-                self.progress_callback(95, f"Processing... ({total_size})")
-                return
-        except Exception as e:
-            log.debug("Progress parse error: %s", e)
-
-    def _parse_aria2_line(self, msg):
-        """Parse aria2c progress output."""
-        try:
-            match = re.search(
-                r'\[#\w+\s+([\d.]+\w+)/([\d.]+\w+)\((\d+)%\).*?DL:([\d.]+\w+)',
-                msg
-            )
-            if match:
-                downloaded = match.group(1)
-                total = match.group(2)
-                percent = float(match.group(3))
-                speed = match.group(4) + "/s"
-                status = f"{speed} | {downloaded}/{total} | Downloading..."
-                self.progress_callback(min(percent, 99), status)
-        except Exception as e:
-            log.debug("Aria2 progress parse error: %s", e)
 
 
 class VideoDownloader:
@@ -399,7 +372,7 @@ class VideoDownloader:
                 f"web+{self.po_token}"
             ]
         opts = {
-            'logger': YtDlpLogger(progress_callback),
+            'logger': YtDlpLogger(),
             'extractor_args': {'youtube': youtube_args},
         }
         # Provide ffmpeg path for format probing (critical for audio stream detection)
@@ -473,7 +446,11 @@ class VideoDownloader:
 
     def _build_common_download_opts(self, output_path, quality_tag, progress_callback):
         """Build shared download options for both simple and advanced modes."""
-        outtmpl = os.path.join(output_path, f'%(title)s [{quality_tag}].%(ext)s')
+        # Validate path
+        real_output_dir = os.path.realpath(output_path)
+        
+        # Enforce sanitization for the output template
+        outtmpl = os.path.join(real_output_dir, f'%(title).200s [{quality_tag}].%(ext)s')
         ydl_opts = self._get_base_opts(progress_callback)
         ydl_opts.update({
             'outtmpl': outtmpl,
@@ -489,7 +466,7 @@ class VideoDownloader:
             ydl_opts['external_downloader'] = self.aria2_path
             ydl_opts['external_downloader_args'] = [
                 '-x', '16', '-s', '16', '-k', '1M',
-                '--summary-interval=1'
+                '--summary-interval=1', '--file-allocation=none'
             ]
             log.info("Using aria2c for multithreaded downloading")
         else:
