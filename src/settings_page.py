@@ -26,7 +26,7 @@ class SettingsPage(QWidget):
         super().__init__(parent)
         self.settings = settings_manager
         self._setup_ui()
-        self._load_current_settings()
+        self.load_settings()
 
     def _create_icon_label(self, emoji: str, icon_name: str, size: int = 24) -> QLabel:
         label = QLabel()
@@ -475,7 +475,7 @@ class SettingsPage(QWidget):
 
         discard_btn = QPushButton("Discard Changes")
         discard_btn.setFont(QFont("Segoe UI", 12, QFont.Weight.DemiBold))
-        discard_btn.clicked.connect(self._load_current_settings)
+        discard_btn.clicked.connect(self.load_settings)
         footer_layout.addWidget(discard_btn)
 
         save_btn = QPushButton("Save Configuration")
@@ -533,19 +533,18 @@ class SettingsPage(QWidget):
                 btn.setStyleSheet("")
         self.theme_changed.emit(theme_key)
 
-    def _load_current_settings(self):
+    def load_settings(self):
         self.path_input.setText(self.settings.get_download_path())
         current_theme = self.settings.get_theme()
         self._on_theme_selected(current_theme)
 
-        # Load extended settings
-        settings = self.settings.settings
-        self.pattern_input.setText(settings.get("filename_pattern", "{date}_{filename}.{ext}"))
-        self.auto_resume_cb.setChecked(settings.get("auto_resume", True))
-        self.concurrent_slider.setValue(settings.get("max_concurrent", 5))
-        self.speed_limit_input.setText(str(settings.get("speed_limit", 0)))
+        # Load extended settings using the robust get() method
+        self.pattern_input.setText(self.settings.get("filename_pattern", "{date}_{filename}.{ext}"))
+        self.auto_resume_cb.setChecked(self.settings.get("auto_resume", True))
+        self.concurrent_slider.setValue(self.settings.get("max_concurrent", 5))
+        self.speed_limit_input.setText(str(self.settings.get("speed_limit", 0)))
 
-        intensity = settings.get("thread_intensity", "high")
+        intensity = self.settings.get("thread_intensity", "high")
         intensity_map = {"low": 0, "medium": 1, "high": 2, "extreme": 3}
         self.thread_combo.setCurrentIndex(intensity_map.get(intensity, 2))
 
@@ -557,15 +556,15 @@ class SettingsPage(QWidget):
         self.settings.set_download_path(self.path_input.text())
 
         intensity_map = {0: "low", 1: "medium", 2: "high", 3: "extreme"}
-
-        self.settings.settings.update({
-            "filename_pattern": self.pattern_input.text(),
-            "auto_resume": self.auto_resume_cb.isChecked(),
-            "max_concurrent": self.concurrent_slider.value(),
-            "speed_limit": int(self.speed_limit_input.text() or 0),
-            "thread_intensity": intensity_map.get(self.thread_combo.currentIndex(), "high"),
-            "po_token": self.po_token_input.text().strip(),
-            "cookies_path": self.cookies_input.text().strip(),
-        })
-        self.settings.save_settings()
-        self.settings_changed.emit(self.settings.settings)
+        
+        self.settings.set("filename_pattern", self.pattern_input.text())
+        self.settings.set("auto_resume", self.auto_resume_cb.isChecked())
+        self.settings.set("max_concurrent", self.concurrent_slider.value())
+        self.settings.set("speed_limit", int(self.speed_limit_input.text() or 0))
+        self.settings.set("thread_intensity", intensity_map.get(self.thread_combo.currentIndex(), "high"))
+        
+        self.settings.set_po_token(self.po_token_input.text().strip())
+        self.settings.set_cookies_path(self.cookies_input.text().strip())
+        
+        # Emit an empty dict or minimal config so listeners know a save occurred
+        self.settings_changed.emit({})
