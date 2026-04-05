@@ -251,6 +251,7 @@ def main():
     parser.add_argument("--skip-tools", action="store_true", help="Skip binary dependency checks")
     parser.add_argument("--onefile", action="store_true", help="Windows: standalone .exe")
     parser.add_argument("--no-appimage", action="store_true", help="Linux: skip AppImage creation")
+    parser.add_argument("--package", action="store_true", help="Build native installers (.dmg, .deb, .AppImage, .exe)")
     parser.add_argument("--clean-only", action="store_true", help="Wipe build folders and exit")
     
     args = parser.parse_args()
@@ -263,15 +264,35 @@ def main():
     # Phase 1: Build
     run_build(onefile=args.onefile, skip_tools=args.skip_tools)
     
-    # Phase 2: Post-Processing
-    if IS_LINUX and not args.no_appimage:
-        create_appimage()
-    
-    if IS_WINDOWS and not args.onefile:
-        print("\nOK: Build ready for Inno Setup. Use 'setup.iss' to create the installer.")
-    
-    if IS_MAC:
-        print_notarization_help()
+    # Phase 2: Post-Processing & Packaging
+    if args.package:
+        print("\n📦 Starting Installer Packaging...")
+        if IS_WINDOWS:
+            # Look for Inno Setup Compiler
+            iscc = r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+            if os.path.exists(iscc):
+                print("INFO: Running Inno Setup Compiler...")
+                subprocess.run([iscc, "setup.iss"], check=False)
+            else:
+                print("WARNING: Inno Setup (ISCC.exe) not found. Please install it to build the .exe installer.")
+        
+        elif IS_MAC:
+            print("INFO: Building macOS DMG...")
+            subprocess.run(["bash", "scripts/create_dmg.sh"], check=False)
+            print_notarization_help()
+            
+        elif IS_LINUX:
+            print("INFO: Building Linux packages...")
+            if not args.no_appimage:
+                subprocess.run(["bash", "scripts/create_appimage.sh"], check=False)
+            subprocess.run(["bash", "scripts/create_deb.sh"], check=False)
+    else:
+        # Standard hints if not packaging
+        if IS_WINDOWS and not args.onefile:
+            print("\nOK: Build ready for Inno Setup. Use 'setup.iss' to create the installer.")
+        
+        if IS_MAC:
+            print_notarization_help()
 
     print("\nINFO: Build process complete.")
 

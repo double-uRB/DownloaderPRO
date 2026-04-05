@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=DownloaderPRO
+Comment=Advanced YouTube Video and Audio Downloader
+Exec=downloaderpro
+Icon=downloaderpro
+Terminal=false
+Type=Application
+Categories=Video;Audio;Network;
+Keywords=YouTube;Downloader;Video;Audio;
+StartupNotify=true
+Actions=NewWindow;
+
+[Desktop Action NewWindow]
+Name=New Window
+Exec=downloaderpro
