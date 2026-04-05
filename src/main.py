@@ -764,7 +764,7 @@ class YouTubeDownloaderApp(QMainWindow):
     def _handle_download_completed(self, dl_id, title, output_path, progress_widget):
         """Processes a finished download, updates UI, and saves to history."""
         # Update progress widget
-        progress_widget.download_complete(output_path)
+        progress_widget.download_complete()
         
         # Update downloads page (moves from active to completed list)
         # Note: complete_download handles finding the file on disk if possible

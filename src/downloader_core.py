@@ -371,6 +371,7 @@ class VideoDownloader:
                 f"android+{self.po_token}",
                 f"web+{self.po_token}"
             ]
+            
         opts = {
             'logger': YtDlpLogger(),
             'extractor_args': {'youtube': youtube_args},

@@ -37,6 +37,7 @@ class VideoPlayerPage(QWidget):
         
         # Audio default volume
         self.audio_output.setVolume(1.0)
+        log.info(f"Initialized AudioOutput: Volume={self.audio_output.volume()}, Muted={self.audio_output.isMuted()}")
         
         self._setup_ui()
         self._setup_connections()
@@ -249,6 +250,10 @@ class VideoPlayerPage(QWidget):
         if not self.seek_slider.isSliderDown():
             self.seek_slider.setValue(position)
         self.time_label.setText(self._format_time(position))
+        
+        # Log volume and player info once per 5 seconds to debug audio
+        if position % 5000 < 50:
+             log.debug(f"Player Volume: {self.audio_output.volume()} | Device: {self.audio_output.device().description() if self.audio_output.device() else 'None'}")
 
     def _on_duration_changed(self, duration):
         self.seek_slider.setRange(0, duration)

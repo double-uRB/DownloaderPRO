@@ -49,13 +49,13 @@ def verify_file(path, expected_hash):
                 sha256.update(chunk)
         actual_hash = sha256.hexdigest()
         if actual_hash != expected_hash:
-            print(f"❌ Hash mismatch for {path}!")
+            print(f"FAILED Hash mismatch for {path}!")
             print(f"   Expected: {expected_hash}")
             print(f"   Actual:   {actual_hash}")
             return False
         return True
     except Exception as e:
-        print(f"❌ Error verifying {path}: {e}")
+        print(f"FAILED Error verifying {path}: {e}")
         return False
 
 def safe_rmtree(path, max_retries=3):
@@ -80,15 +80,15 @@ def safe_rmtree(path, max_retries=3):
             return True
             
         except PermissionError as e:
-            print(f"⚠️  Attempt {attempt + 1}: Permission denied - {e}")
+            print(f"WARNING Attempt {attempt + 1}: Permission denied - {e}")
             if attempt < max_retries - 1:
-                print("🔄 Waiting 3 seconds and retrying...")
+                print("INFO Waiting 3 seconds and retrying...")
                 time.sleep(3)
             else:
-                print("❌ Could not remove directory after multiple attempts")
+                print("FAILED Could not remove directory after multiple attempts")
                 return False
         except Exception as e:
-            print(f"❌ Unexpected error: {e}")
+            print(f"FAILED Unexpected error: {e}")
             return False
     
     return False
@@ -102,20 +102,20 @@ def download_ffmpeg():
     ffmpeg_path = tools_dir / binary_name
     
     if ffmpeg_path.exists():
-        print(f"✅ FFmpeg already present at {ffmpeg_path}")
+        print(f"OK FFmpeg already present at {ffmpeg_path}")
         return
         
     if IS_LINUX:
-        print("🐧 Detected Linux: Please ensure 'ffmpeg' is installed via your package manager (e.g., sudo apt install ffmpeg).")
+        print("INFO Detected Linux: Please ensure 'ffmpeg' is installed via your package manager (e.g., sudo apt install ffmpeg).")
         return
 
     url = FFMPEG_URLS.get(SYSTEM)
     expected_hash = FFMPEG_HASHES.get(SYSTEM)
     if not url:
-        print(f"❌ No automated download for {SYSTEM}. Please place {binary_name} in the tools/ folder.")
+        print(f"FAILED No automated download for {SYSTEM}. Please place {binary_name} in the tools/ folder.")
         return
         
-    print(f"📥 Downloading FFmpeg for {SYSTEM}...")
+    print(f"INFO Downloading FFmpeg for {SYSTEM}...")
     temp_zip = f"ffmpeg_{SYSTEM.lower()}_temp.zip"
     
     try:
@@ -138,10 +138,10 @@ def download_ffmpeg():
             ffmpeg_path.chmod(0o755) # Make executable
             
         os.remove(temp_zip)
-        print("✅ FFmpeg downloaded successfully")
+        print("OK FFmpeg downloaded successfully")
         
     except Exception as e:
-        print(f"❌ Failed to download FFmpeg: {e}")
+        print(f"FAILED Failed to download FFmpeg: {e}")
 
 
 def download_aria2c():
@@ -153,20 +153,20 @@ def download_aria2c():
     aria2_path = tools_dir / binary_name
     
     if aria2_path.exists():
-        print(f"✅ aria2c already present at {aria2_path}")
+        print(f"OK aria2c already present at {aria2_path}")
         return
         
     if IS_LINUX:
-        print("🐧 Detected Linux: Please ensure 'aria2' is installed via your package manager.")
+        print("INFO Detected Linux: Please ensure 'aria2' is installed via your package manager.")
         return
 
     url = ARIA2_URLS.get(SYSTEM)
     expected_hash = ARIA2_HASHES.get(SYSTEM)
     if not url:
-        print(f"❌ No automated download for {SYSTEM}. Please place {binary_name} in the tools/ folder.")
+        print(f"FAILED No automated download for {SYSTEM}. Please place {binary_name} in the tools/ folder.")
         return
     
-    print(f"📥 Downloading aria2c for {SYSTEM}...")
+    print(f"INFO Downloading aria2c for {SYSTEM}...")
     temp_file = f"aria2_{SYSTEM.lower()}_temp" + (".zip" if IS_WINDOWS else ".dmg")
     
     try:
@@ -188,7 +188,7 @@ def download_aria2c():
         elif IS_MAC:
             # DMG extraction is complex in pure python.
             # Usually better to tell user to install via Homebrew if auto-download fails.
-            print("🍎 Automated aria2c extraction from .dmg is not supported in this script.")
+            print("INFO Automated aria2c extraction from .dmg is not supported in this script.")
             print("   Please install aria2 via Homebrew: brew install aria2")
             print("   And copy the binary (/usr/local/bin/aria2c) to 'tools/'")
             # Don't fail the whole build if we can't auto-dowload on Mac
@@ -199,23 +199,23 @@ def download_aria2c():
             
         if os.path.exists(temp_file):
             os.remove(temp_file)
-        print("✅ aria2c setup finished")
+        print("OK aria2c setup finished")
         
     except Exception as e:
-        print(f"❌ Failed to download aria2c: {e}")
+        print(f"FAILED Failed to download aria2c: {e}")
 
 
 def build_executable():
     """Build standalone executable with all dependencies"""
     
-    print("🔨 Building Standalone YouTube Downloader Pro...")
+    print("### Building Standalone YouTube Downloader Pro...")
     
     # Ensure tools are present
     download_ffmpeg()
     download_aria2c()
     
     # Clean previous builds
-    print("🧹 Cleaning previous builds...")
+    print("INFO Cleaning previous builds...")
     for folder in ["dist", "build"]:
         if os.path.exists(folder):
             safe_rmtree(folder)
@@ -248,23 +248,23 @@ def build_executable():
     if icon_path.exists():
         cmd.extend(["--icon", str(icon_path)])
     
-    print(f"🚀 Running PyInstaller...")
+    print(f"INFO Running PyInstaller...")
     try:
         subprocess.run(cmd, check=True)
         print("\n" + "="*50)
-        print("✨ BUILD SUCCESSFUL! ✨")
+        print("+++ BUILD SUCCESSFUL! +++")
         print("="*50)
         
         output_ext = ".exe" if IS_WINDOWS else ""
         output_exe = Path(f'dist/YouTubeDownloaderPro{output_ext}').absolute()
-        print(f"\n📦 STANDALONE BINARY READY: {output_exe}")
-        print(f"\n💡 This file contains EVERYTHING (Python, FFmpeg{' (Linux: system)' if IS_LINUX else ''}, aria2c{' (Linux: system)' if IS_LINUX else ''}, icons).")
-        print("✅ You can share just this single file with anyone!")
+        print(f"INFO STANDALONE BINARY READY: {output_exe}")
+        print(f"INFO This file contains EVERYTHING (Python, FFmpeg{' (Linux: system)' if IS_LINUX else ''}, aria2c{' (Linux: system)' if IS_LINUX else ''}, icons).")
+        print("OK You can share just this single file with anyone!")
         print("="*50)
 
         
     except subprocess.CalledProcessError as e:
-        print(f"❌ Build failed: {e}")
+        print(f"FAILED Build failed: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
