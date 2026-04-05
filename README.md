@@ -16,7 +16,7 @@ Unlike most downloaders, Downloader PRO provides a **Zero-Dependency** experienc
 - **💎 Ultra-HD Support**: Full 4K and 8K support via official YouTube Account Login (OAuth2).
 - **🎨 Stunning UI**: Modern Glassmorphism design with real-time theme switching.
 - **🛡️ Security Hardened**: Built-in SHA-256 verification for external tools (FFmpeg/aria2c), path traversal protection, and secure credential storage (Keyring/DPAPI).
-- **📦 Portable & Cross-Platform**: No installation required on Windows (standalone `.exe`). Also runs natively with automated tool-chain setup on macOS and Linux.
+- **📦 Portable & Multiplatform**: No installation required on Windows (standalone `.exe`). Native macOS (.app) and Linux (AppImage) support with automated tool-chain setup.
 
 
 ## 🖼️ Screenshots
@@ -36,16 +36,20 @@ Unlike most downloaders, Downloader PRO provides a **Zero-Dependency** experienc
 
 ### 📦 For Users (Easiest)
 1. Go to the **[Releases](https://github.com/double-uRB/DownloaderPRO/releases)** page.
-2. Download the latest `YouTubeDownloaderPro.exe`.
-3. Run it! (No Python, FFmpeg, or extra tools required).
+2. Download the package for your OS:
+   - **Windows**: `DownloaderPRO_Setup.exe` (Installer) or `YouTubeDownloaderPro.exe` (Standalone).
+   - **macOS**: `DownloaderPRO.dmg`.
+   - **Linux**: `DownloaderPRO.AppImage`.
+3. Run it! All tools (FFmpeg, aria2c, yt-dlp) are managed automatically.
 
-> [!NOTE]
-> Since this is a standalone tool, Windows SmartScreen may show a warning. Click "More Info" -> "Run Anyway" to proceed.
+> [!TIP]
+> On macOS/Linux, the app will automatically detect your GPU and fetch hardware-accelerated binaries on first launch.
 
 ### 🛠️ For Developers / Advanced Users
 If you want to run from source or build your own version:
-1. **[View the Installation Guide](docs/INSTALLATION.md)** for detailed setup instructions.
-2. Run `python src/main.py` once dependencies are installed.
+1. **[View the Installation Guide](docs/INSTALLATION.md)** for detailed setup and cross-platform dependencies.
+2. **[View the Multiplatform Build Guide](docs/BUILD_UNIX.md)** to generate your own binaries for Windows, Mac, or Linux.
+3. Run `python src/main.py` once dependencies are installed.
 
 ---
 

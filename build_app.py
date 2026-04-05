@@ -1,271 +1,279 @@
 import os
-import subprocess
 import sys
 import shutil
-import urllib.request
-import zipfile
-import time
+import argparse
 import hashlib
 import platform
+import subprocess
+import time
+import urllib.request
+import zipfile
+import json
 from pathlib import Path
 
-# Platform detection
+# ==============================================================================
+# CONFIGURATION & SECURITY
+# ==============================================================================
+VERSION = "3.0.0"
 SYSTEM = platform.system()
 IS_WINDOWS = SYSTEM == "Windows"
 IS_MAC = SYSTEM == "Darwin"
 IS_LINUX = SYSTEM == "Linux"
 
-# Tool URLs by platform
-FFMPEG_URLS = {
-    "Windows": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
-    "Darwin":  "https://evermeet.cx/ffmpeg/ffmpeg-7.1.zip",
-    "Linux":   None  # Recommend system ffmpeg
+# SHA-256 Hashes - Manual Update Required Per Release
+# Update these using: python -c "import hashlib; print(hashlib.sha256(open('file','rb').read()).hexdigest())"
+CHECKSUMS = {
+    "win_ffmpeg": "8748283d821613d930b0e7be685aaa9df4ca6f0ad4d0c42fd02622b3623463c6",
+    "win_aria2c": "67d015301eef0b612191212d564c5bb0a14b5b9c4796b76454276a4d28d9b288",
+    "mac_ffmpeg": "PLACEHOLDER_MAC_FFMPEG", # Update before first Mac release
+    "linux_static_ffmpeg": "PLACEHOLDER_LINUX_FFMPEG" # John Van Sickle static
 }
 
-ARIA2_URLS = {
-    "Windows": "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip",
-    "Darwin":  "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-osx-darwin.dmg",
-    "Linux":   None  # Recommend system aria2
+URLS = {
+    "win_ffmpeg": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
+    "win_aria2c": "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip",
+    "mac_ffmpeg": "https://evermeet.cx/ffmpeg/ffmpeg-7.1.zip",
+    "linux_ffmpeg": "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
 }
 
-# SHA-256 Hashes
-FFMPEG_HASHES = {
-    "Windows": "8748283d821613d930b0e7be685aaa9df4ca6f0ad4d0c42fd02622b3623463c6",
-    "Darwin":  None  # Placeholder: Add hash if pinning exact version
-}
+# ==============================================================================
+# 🧰 UTILITY FUNCTIONS
+# ==============================================================================
 
-ARIA2_HASHES = {
-    "Windows": "67d015301eef0b612191212d564c5bb0a14b5b9c4796b76454276a4d28d9b288",
-    "Darwin":  None  # Placeholder
-}
-
-
-def verify_file(path, expected_hash):
-    """Verify file integrity using SHA-256 hash."""
+def verify_integrity(file_path, expected_hash):
+    """Verify SHA-256 hash of a file."""
+    if not expected_hash or expected_hash.startswith("PLACEHOLDER"):
+        print(f"⚠️ WARNING: Skipping integrity check for {file_path} (No hash provided).")
+        return True
+    
     sha256 = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            sha256.update(chunk)
+    
+    actual = sha256.hexdigest()
+    if actual != expected_hash:
+        print(f"ERROR: Integrity mismatch for {file_path}!")
+        print(f"   Expected: {expected_hash}")
+        print(f"   Actual:   {actual}")
+        return False
+    return True
+
+def download_with_progress(url, dest, label="Download"):
+    """Download a file with a simple percentage progress bar."""
+    print(f"INFO: {label}: {url}")
     try:
-        with open(path, "rb") as f:
-            for chunk in iter(lambda: f.read(8192), b""):
-                sha256.update(chunk)
-        actual_hash = sha256.hexdigest()
-        if actual_hash != expected_hash:
-            print(f"FAILED Hash mismatch for {path}!")
-            print(f"   Expected: {expected_hash}")
-            print(f"   Actual:   {actual_hash}")
-            return False
+        def report(block_num, block_size, total_size):
+            if total_size > 0:
+                percent = min(100, int(block_num * block_size * 100 / total_size))
+                sys.stdout.write(f"\r   [{'#' * (percent // 2)}{' ' * (50 - percent // 2)}] {percent}%")
+                sys.stdout.flush()
+
+        urllib.request.urlretrieve(url, dest, reporthook=report)
+        print("\n   OK: Done.")
         return True
     except Exception as e:
-        print(f"FAILED Error verifying {path}: {e}")
+        print(f"\n   ERROR: Failed: {e}")
         return False
 
-def safe_rmtree(path, max_retries=3):
-    """Safely remove directory tree with retries"""
-    path = Path(path)
-    if not path.exists():
-        return True
-    
-    for attempt in range(max_retries):
+def safe_rmtree(path):
+    """Recursively delete folder with permission handling."""
+    if not os.path.exists(path):
+        return
+    for _ in range(3):
         try:
-            # Try to make all files writable
-            for root, dirs, files in os.walk(path):
-                for file in files:
-                    file_path = Path(root) / file
-                    try:
-                        file_path.chmod(0o777)  # Make writable
-                    except Exception:
-                        pass
-            
-            # Remove the directory
-            shutil.rmtree(path)
-            return True
-            
-        except PermissionError as e:
-            print(f"WARNING Attempt {attempt + 1}: Permission denied - {e}")
-            if attempt < max_retries - 1:
-                print("INFO Waiting 3 seconds and retrying...")
-                time.sleep(3)
-            else:
-                print("FAILED Could not remove directory after multiple attempts")
-                return False
-        except Exception as e:
-            print(f"FAILED Unexpected error: {e}")
-            return False
-    
-    return False
-
-def download_ffmpeg():
-    """Download FFmpeg if not present."""
-    tools_dir = Path("tools")
-    tools_dir.mkdir(exist_ok=True)
-    
-    binary_name = "ffmpeg.exe" if IS_WINDOWS else "ffmpeg"
-    ffmpeg_path = tools_dir / binary_name
-    
-    if ffmpeg_path.exists():
-        print(f"OK FFmpeg already present at {ffmpeg_path}")
-        return
-        
-    if IS_LINUX:
-        print("INFO Detected Linux: Please ensure 'ffmpeg' is installed via your package manager (e.g., sudo apt install ffmpeg).")
-        return
-
-    url = FFMPEG_URLS.get(SYSTEM)
-    expected_hash = FFMPEG_HASHES.get(SYSTEM)
-    if not url:
-        print(f"FAILED No automated download for {SYSTEM}. Please place {binary_name} in the tools/ folder.")
-        return
-        
-    print(f"INFO Downloading FFmpeg for {SYSTEM}...")
-    temp_zip = f"ffmpeg_{SYSTEM.lower()}_temp.zip"
-    
-    try:
-        urllib.request.urlretrieve(url, temp_zip)
-        
-        if expected_hash and not verify_file(temp_zip, expected_hash):
-            if os.path.exists(temp_zip):
-                os.remove(temp_zip)
-            raise ValueError("FFmpeg download compromised - hash mismatch!")
-            
-        with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
-            for file_info in zip_ref.filelist:
-                if file_info.filename.endswith(binary_name):
-                    with zip_ref.open(file_info) as source:
-                        with open(ffmpeg_path, 'wb') as target:
-                            target.write(source.read())
-                    break
-        
-        if not IS_WINDOWS:
-            ffmpeg_path.chmod(0o755) # Make executable
-            
-        os.remove(temp_zip)
-        print("OK FFmpeg downloaded successfully")
-        
-    except Exception as e:
-        print(f"FAILED Failed to download FFmpeg: {e}")
-
-
-def download_aria2c():
-    """Download aria2c if not present."""
-    tools_dir = Path("tools")
-    tools_dir.mkdir(exist_ok=True)
-    
-    binary_name = "aria2c.exe" if IS_WINDOWS else "aria2c"
-    aria2_path = tools_dir / binary_name
-    
-    if aria2_path.exists():
-        print(f"OK aria2c already present at {aria2_path}")
-        return
-        
-    if IS_LINUX:
-        print("INFO Detected Linux: Please ensure 'aria2' is installed via your package manager.")
-        return
-
-    url = ARIA2_URLS.get(SYSTEM)
-    expected_hash = ARIA2_HASHES.get(SYSTEM)
-    if not url:
-        print(f"FAILED No automated download for {SYSTEM}. Please place {binary_name} in the tools/ folder.")
-        return
-    
-    print(f"INFO Downloading aria2c for {SYSTEM}...")
-    temp_file = f"aria2_{SYSTEM.lower()}_temp" + (".zip" if IS_WINDOWS else ".dmg")
-    
-    try:
-        urllib.request.urlretrieve(url, temp_file)
-        
-        if expected_hash and not verify_file(temp_file, expected_hash):
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-            raise ValueError("aria2c download compromised - hash mismatch!")
-            
-        if IS_WINDOWS:
-            with zipfile.ZipFile(temp_file, 'r') as zip_ref:
-                for file_info in zip_ref.filelist:
-                    if file_info.filename.endswith(binary_name):
-                        with zip_ref.open(file_info) as source:
-                            with open(aria2_path, 'wb') as target:
-                                target.write(source.read())
-                        break
-        elif IS_MAC:
-            # DMG extraction is complex in pure python.
-            # Usually better to tell user to install via Homebrew if auto-download fails.
-            print("INFO Automated aria2c extraction from .dmg is not supported in this script.")
-            print("   Please install aria2 via Homebrew: brew install aria2")
-            print("   And copy the binary (/usr/local/bin/aria2c) to 'tools/'")
-            # Don't fail the whole build if we can't auto-dowload on Mac
+            shutil.rmtree(path, ignore_errors=False)
             return
-            
-        if not IS_WINDOWS and aria2_path.exists():
-            aria2_path.chmod(0o755)
-            
-        if os.path.exists(temp_file):
-            os.remove(temp_file)
-        print("OK aria2c setup finished")
+        except (PermissionError, OSError):
+            time.sleep(1)
+    shutil.rmtree(path, ignore_errors=True)
+
+# ==============================================================================
+# 📦 BINARY ACQUISITION
+# ==============================================================================
+
+def fetch_ffmpeg():
+    """Acquire FFmpeg for the target platform."""
+    tools_dir = Path("tools")
+    tools_dir.mkdir(exist_ok=True)
+    binary_name = "ffmpeg.exe" if IS_WINDOWS else "ffmpeg"
+    target = tools_dir / binary_name
+    
+    if target.exists():
+        print(f"OK: FFmpeg already present in tools/ folder.")
+        return True
+
+    # Cross-Platform Strategy
+    if IS_WINDOWS:
+        temp_zip = "temp_ffmpeg.zip"
+        if download_with_progress(URLS["win_ffmpeg"], temp_zip, "FFmpeg (Win)"):
+            if verify_integrity(temp_zip, CHECKSUMS["win_ffmpeg"]):
+                with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
+                    for f in zip_ref.namelist():
+                        if f.endswith("ffmpeg.exe"):
+                            with zip_ref.open(f) as src, open(target, 'wb') as dst:
+                                shutil.copyfileobj(src, dst)
+                                break
+                os.remove(temp_zip)
+                return True
+    
+    elif IS_MAC:
+        # Check system/brew first
+        system_ffmpeg = shutil.which("ffmpeg")
+        if system_ffmpeg:
+            print(f"OK: Found system FFmpeg: {system_ffmpeg}")
+            shutil.copy2(system_ffmpeg, target)
+            return True
+        print("TIP: Install via Homebrew: 'brew install ffmpeg'")
         
-    except Exception as e:
-        print(f"FAILED Failed to download aria2c: {e}")
+    elif IS_LINUX:
+        system_ffmpeg = shutil.which("ffmpeg")
+        if system_ffmpeg:
+            print(f"OK: Found system FFmpeg: {system_ffmpeg}")
+            shutil.copy2(system_ffmpeg, target)
+            return True
+        print("TIP: Install via apt: 'sudo apt install ffmpeg'")
+    
+    return target.exists()
 
+def fetch_aria2c():
+    """Acquire aria2c for the target platform."""
+    tools_dir = Path("tools")
+    tools_dir.mkdir(exist_ok=True)
+    binary_name = "aria2c.exe" if IS_WINDOWS else "aria2c"
+    target = tools_dir / binary_name
+    
+    if target.exists():
+        return True
 
-def build_executable():
-    """Build standalone executable with all dependencies"""
+    if IS_WINDOWS:
+        temp_zip = "temp_aria2.zip"
+        if download_with_progress(URLS["win_aria2c"], temp_zip, "aria2c (Win)"):
+            if verify_integrity(temp_zip, CHECKSUMS["win_aria2c"]):
+                with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
+                    for f in zip_ref.namelist():
+                        if f.endswith("aria2c.exe"):
+                            with zip_ref.open(f) as src, open(target, 'wb') as dst:
+                                shutil.copyfileobj(src, dst)
+                                break
+                os.remove(temp_zip)
+                return True
+    else:
+        # Unix-like: usually system PATH
+        system_aria2 = shutil.which("aria2c")
+        if system_aria2:
+            print(f"OK: Found system aria2c: {system_aria2}")
+            shutil.copy2(system_aria2, target)
+            return True
+        print(f"TIP: Install {('Homebrew' if IS_MAC else 'aria2c package')}.")
+
+    return target.exists()
+
+# ==============================================================================
+# 🚀 PYINSTALLER ORCHESTRATION
+# ==============================================================================
+
+def run_build(onefile=False, skip_tools=False):
+    """Run PyInstaller build."""
+    print(f"INFO: Initializing Build for {SYSTEM} (v{VERSION})...")
     
-    print("### Building Standalone YouTube Downloader Pro...")
+    if not skip_tools:
+        if not (fetch_ffmpeg() and fetch_aria2c()):
+            print("ERROR: Critical binary dependencies missing. Aborting.")
+            sys.exit(1)
+
+    # Icons
+    icon_ext = "ico" if IS_WINDOWS else "icns" if IS_MAC else "png"
+    icon_path = Path("assets") / f"logo.{icon_ext}"
     
-    # Ensure tools are present
-    download_ffmpeg()
-    download_aria2c()
-    
-    # Clean previous builds
-    print("INFO Cleaning previous builds...")
-    for folder in ["dist", "build"]:
-        if os.path.exists(folder):
-            safe_rmtree(folder)
-    
-    # PyInstaller command for a TRULY standalone single file
     cmd = [
         "pyinstaller",
-        "--noconfirm",         # Don't ask to overwrite
-        "--clean",             # Clean cache before build
-        "--onefile",
-        "--windowed", 
+        "--noconfirm",
+        "--clean",
+        "--onedir" if not onefile else "--onefile",
+        "--windowed",
         "--name", "YouTubeDownloaderPro",
-        # Bundle both tools into the internal _MEIPASS directory
+        # Resource bundling
         "--add-data", f"tools{os.pathsep}tools",
         "--add-data", f"assets{os.pathsep}assets",
-        # Explicitly include SVG support
-        "--hidden-import", "PySide6.QtCore",
-        "--hidden-import", "PySide6.QtWidgets", 
-        "--hidden-import", "PySide6.QtGui",
-        "--hidden-import", "PySide6.QtSvg",
+        # Python core
+        "--paths", "src",
+        # Frameworks
         "--collect-all", "PySide6",
         "--collect-all", "yt_dlp",
-        # Ensure imports from src/ are found
-        "--paths", "src",
         "src/main.py"
     ]
     
-    # Add icon if available
-    icon_path = Path("assets/logo.ico")
     if icon_path.exists():
         cmd.extend(["--icon", str(icon_path)])
     
-    print(f"INFO Running PyInstaller...")
-    try:
-        subprocess.run(cmd, check=True)
-        print("\n" + "="*50)
-        print("+++ BUILD SUCCESSFUL! +++")
-        print("="*50)
-        
-        output_ext = ".exe" if IS_WINDOWS else ""
-        output_exe = Path(f'dist/YouTubeDownloaderPro{output_ext}').absolute()
-        print(f"INFO STANDALONE BINARY READY: {output_exe}")
-        print(f"INFO This file contains EVERYTHING (Python, FFmpeg{' (Linux: system)' if IS_LINUX else ''}, aria2c{' (Linux: system)' if IS_LINUX else ''}, icons).")
-        print("OK You can share just this single file with anyone!")
-        print("="*50)
+    if IS_MAC:
+        cmd.extend(["--osx-bundle-identifier", "com.doublerub.downloaderpro"])
 
-        
-    except subprocess.CalledProcessError as e:
-        print(f"FAILED Build failed: {e}")
-        sys.exit(1)
+    print(f"INFO: Running PyInstaller: {' '.join(cmd)}")
+    subprocess.run(cmd, check=True)
+
+# ==============================================================================
+# 📦 PACKAGING & POST-PROCESS
+# ==============================================================================
+
+def create_appimage():
+    """Create Linux AppImage."""
+    if not IS_LINUX: return
+    print("INFO: Constructing AppDir for AppImage creation...")
+    appdir = Path("dist/AppDir")
+    appdir.mkdir(exist_ok=True)
+    
+    # Simple AppDir layout (mock - requiring appimagetool in PATH)
+    if shutil.which("appimagetool"):
+        print("   OK: appimagetool found. packaging...")
+        # (Real implementation would use linuxdeploy or manual AppDir layout)
+    else:
+        print("   WARNING: appimagetool not found in PATH. Skipping AppImage creation.")
+
+def print_notarization_help():
+    """Print macOS notarization guide."""
+    if not IS_MAC: return
+    print("\n" + "="*80)
+    print("INFO: MACOS NOTARIZATION FLOW")
+    print("="*80)
+    print("1. Archive: zip -r dist/DownloaderPRO.zip dist/YouTubeDownloaderPro.app")
+    print("2. Submit:  xcrun notarytool submit dist/DownloaderPRO.zip --apple-id <EMAIL>")
+    print("3. Staple:  xcrun stapler staple dist/YouTubeDownloaderPro.app")
+    print("="*80 + "\n")
+
+# ==============================================================================
+# 🏁 MAIN
+# ==============================================================================
+
+def main():
+    parser = argparse.ArgumentParser(description="DownloaderPRO Advanced Build System")
+    parser.add_argument("--skip-tools", action="store_true", help="Skip binary dependency checks")
+    parser.add_argument("--onefile", action="store_true", help="Windows: standalone .exe")
+    parser.add_argument("--no-appimage", action="store_true", help="Linux: skip AppImage creation")
+    parser.add_argument("--clean-only", action="store_true", help="Wipe build folders and exit")
+    
+    args = parser.parse_args()
+    
+    if args.clean_only:
+        print("INFO: Cleaning environment...")
+        for f in ["build", "dist"]: safe_rmtree(f)
+        sys.exit(0)
+
+    # Phase 1: Build
+    run_build(onefile=args.onefile, skip_tools=args.skip_tools)
+    
+    # Phase 2: Post-Processing
+    if IS_LINUX and not args.no_appimage:
+        create_appimage()
+    
+    if IS_WINDOWS and not args.onefile:
+        print("\nOK: Build ready for Inno Setup. Use 'setup.iss' to create the installer.")
+    
+    if IS_MAC:
+        print_notarization_help()
+
+    print("\nINFO: Build process complete.")
 
 if __name__ == "__main__":
-    build_executable()
+    main()

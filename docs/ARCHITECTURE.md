@@ -110,7 +110,28 @@ The application manages user data and secrets through a multi-tier persistence s
 
 ---
 
-## 6. Build System & Tool Orchestration (`build_app.py`)
+## 6. Multiplatform Abstraction
+Downloader PRO is designed to run natively on Windows, macOS, and Linux. This is achieved through several abstraction layers:
+
+### 🛠️ Hardware-Aware Tool Management (`download_tools.py`)
+Instead of bundling massive binaries for every architecture, the application includes a **Bootstrap Helper**. On first launch (or during installation), it:
+- **Detects GPU**: Uses `wmic` (Windows), `system_profiler` (Mac), or `lspci` (Linux) to identify the vendor.
+- **Fetches Optimized FFmpeg**: Downloads binaries with **NVENC** (NVIDIA), **AMF** (AMD), or **QSV** (Intel) support automatically.
+- **Binary Naming**: Dynamically handles extensions (`.exe` vs extensionless) and permissions (`chmod +x` on Unix).
+
+### 🔄 OS Persistence
+Automated `yt-dlp` updates are handled through native OS schedulers:
+- **Windows**: `Task Scheduler` (`schtasks`).
+- **macOS**: `LaunchAgents` (`.plist`).
+- **Linux**: `User Crontab`.
+
+### 📂 Path & Shell Abstraction
+- Uses `pathlib` for all internal path manipulations.
+- The `_open_path` helper in `ui_components.py` handles the "Reveal in Finder/Explorer" logic using `open`, `xdg-open`, or `explorer /select`.
+
+---
+
+## 7. Build System & Tool Orchestration (`build_app.py`)
 The project features an intelligent, cross-platform build script designed for zero-configuration for the end user.
 
 - **Platform Detection**: Automatically detects the host OS (Windows, Darwin, Linux).
