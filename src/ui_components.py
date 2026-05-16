@@ -831,20 +831,23 @@ class ProgressWidget(QWidget):
         layout.addWidget(title_label)
 
         stats_row = QHBoxLayout()
-        self.speed_label = QLabel("")
+        self.status_label = QLabel("")
         dl_icon = get_resource_path("assets/icons/download.svg")
         if Path(dl_icon).exists():
-            self.speed_label.setText("  Starting...")
+            self.status_label.setText("  Starting...")
         else:
-            self.speed_label.setText("Starting...")
-        self.speed_label.setObjectName("speed_label")
-        self.speed_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        stats_row.addWidget(self.speed_label)
+            self.status_label.setText("Starting...")
+        self.status_label.setObjectName("speed_label")
+        self.status_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        stats_row.addWidget(self.status_label)
+        
         stats_row.addStretch()
-        self.eta_label = QLabel("")
-        self.eta_label.setObjectName("section_subtitle")
-        self.eta_label.setFont(QFont("Segoe UI", 10))
-        stats_row.addWidget(self.eta_label)
+        
+        self.speed_label = QLabel("")
+        self.speed_label.setObjectName("section_subtitle")
+        self.speed_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.speed_label.setStyleSheet("color: #4cd7f6;")
+        stats_row.addWidget(self.speed_label)
         layout.addLayout(stats_row)
 
         progress_info = QHBoxLayout()
@@ -895,14 +898,22 @@ class ProgressWidget(QWidget):
         self.progress_bar.setValue(int(progress))
         self.percent_label.setText(f"{int(progress)}%")
         parts = [p.strip() for p in status.split("|")]
-        if len(parts) >= 1: self.speed_label.setText(parts[0])
+        if len(parts) >= 1:
+            dl_icon = get_resource_path("assets/icons/download.svg")
+            prefix = "  " if Path(dl_icon).exists() else ""
+            self.status_label.setText(f"{prefix}{parts[0]}")
         if len(parts) >= 2: self.bytes_label.setText(parts[1])
-        if len(parts) >= 3: self.eta_label.setText(parts[2])
-        else: self.eta_label.setText("")
+        if len(parts) >= 3: self.speed_label.setText(parts[2])
+        else: self.speed_label.setText("")
 
     def download_complete(self):
         self._is_finished = True
-        self.speed_label.setText("✅ Download completed!")
+        
+        dl_icon = get_resource_path("assets/icons/download.svg")
+        prefix = "  " if Path(dl_icon).exists() else ""
+        self.status_label.setText(f"{prefix}✅ Download completed!")
+        self.status_label.setStyleSheet("color: #a8d5a2;")
+        
         self.progress_bar.setValue(100)
         self.percent_label.setText("100%")
         check_icon = get_resource_path("assets/icons/check.svg")
@@ -917,7 +928,10 @@ class ProgressWidget(QWidget):
         if error_msg:
             short_err = error_msg[:120] + "..." if len(error_msg) > 120 else error_msg
             display_msg = f"Download failed: {short_err}"
-        self.speed_label.setText(display_msg)
-        self.speed_label.setStyleSheet("color: #ffb4ab;")
+            
+        dl_icon = get_resource_path("assets/icons/download.svg")
+        prefix = "  " if Path(dl_icon).exists() else ""
+        self.status_label.setText(f"{prefix}{display_msg}")
+        self.status_label.setStyleSheet("color: #ffb4ab;")
         self.cancel_btn.setText("  Dismiss")
 

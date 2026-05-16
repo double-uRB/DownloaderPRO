@@ -594,7 +594,6 @@ class VideoDownloader:
                 downloaded = d.get('downloaded_bytes', 0) or 0
                 total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
                 speed = d.get('speed', 0) or 0
-                eta = d.get('eta', None)
 
                 if total > 0:
                     progress = min((downloaded / total) * 100, 100)
@@ -605,22 +604,29 @@ class VideoDownloader:
                 total_str = _format_bytes(total) if total else "?"
                 downloaded_str = _format_bytes(downloaded)
 
-                eta_str = ""
+                eta = d.get('eta', None)
+                eta_str = "Downloading..."
                 if eta:
                     if eta >= 3600:
-                        eta_str = f" | ETA {eta // 3600}h {(eta % 3600) // 60}m"
+                        eta_str = f"ETA {eta // 3600}h {(eta % 3600) // 60}m"
                     elif eta >= 60:
-                        eta_str = f" | ETA {eta // 60}m {eta % 60}s"
+                        eta_str = f"ETA {eta // 60}m {eta % 60}s"
                     else:
-                        eta_str = f" | ETA {eta}s"
+                        eta_str = f"ETA {eta}s"
 
-                status_msg = f"{speed_str} | {downloaded_str}/{total_str}{eta_str}"
+                status_msg = f"{eta_str}|{downloaded_str}/{total_str}|{speed_str}"
                 self.progress_callback(progress, status_msg)
 
             elif status == 'finished':
                 filesize = d.get('total_bytes') or d.get('total_bytes_estimate') or d.get('downloaded_bytes', 0)
                 size_str = _format_bytes(filesize)
+                elapsed = d.get('elapsed', 0)
+                if elapsed and elapsed > 0 and filesize:
+                    avg_speed_str = _format_speed(filesize / elapsed)
+                else:
+                    avg_speed_str = "-- MB/s"
+                    
                 log.info("Stream finished, size: %s. Merging/processing...", size_str)
-                self.progress_callback(95, f"Processing... ({size_str})")
+                self.progress_callback(95, f"Processing...|{size_str}|{avg_speed_str}")
         except Exception as e:
             log.warning("Progress hook error: %s", e)

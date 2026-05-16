@@ -114,10 +114,10 @@ class DownloadItemCard(QWidget):
         title_row.addWidget(title_label)
         title_row.addStretch()
 
-        self.speed_label = QLabel("")
-        self.speed_label.setObjectName("speed_label")
-        self.speed_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        title_row.addWidget(self.speed_label)
+        self.status_label = QLabel("")
+        self.status_label.setObjectName("speed_label")
+        self.status_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        title_row.addWidget(self.status_label)
 
         info_col.addLayout(title_row)
 
@@ -129,10 +129,11 @@ class DownloadItemCard(QWidget):
         source_row.addWidget(source_label)
         source_row.addStretch()
 
-        self.eta_label = QLabel("")
-        self.eta_label.setObjectName("section_subtitle")
-        self.eta_label.setFont(QFont("Segoe UI", 9))
-        source_row.addWidget(self.eta_label)
+        self.speed_label = QLabel("")
+        self.speed_label.setObjectName("section_subtitle")
+        self.speed_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.speed_label.setStyleSheet("color: #4cd7f6;")
+        source_row.addWidget(self.speed_label)
 
         info_col.addLayout(source_row)
 
@@ -199,7 +200,10 @@ class DownloadItemCard(QWidget):
     def update_progress(self, progress, status):
         self.progress_bar.setValue(int(progress))
         self.percent_label.setText(f"{int(progress)}%")
-        self.speed_label.setText(status)
+        parts = [p.strip() for p in status.split("|")]
+        if len(parts) >= 1: self.status_label.setText(parts[0])
+        if len(parts) >= 2: self.bytes_label.setText(parts[1])
+        if len(parts) >= 3: self.speed_label.setText(parts[2])
 
 
 class CompletedItemCard(QWidget):
